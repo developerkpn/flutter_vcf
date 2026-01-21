@@ -11,7 +11,7 @@ import 'CPO/Lab CPO/home_lab_cpo.dart';
 import 'CPO/Unloading CPO/home_unloading_cpo.dart';
 import 'POME/Lab POME/home_lab_pome.dart';
 import 'POME/Unloading POME/home_unloading_pome.dart';
-
+    
 void main() {
   runApp(const VCFApp());
 }
@@ -31,15 +31,15 @@ class VCFApp extends StatelessWidget {
       home: const LoginPage(),
       debugShowCheckedModeBanner: false,
     );  
-  }
+  } 
 }
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key}); 
 
   @override
   State<LoginPage> createState() => _LoginPageState();
-}
+} 
 
 class _LoginPageState extends State<LoginPage> {
   final TextEditingController userIdController = TextEditingController();
@@ -50,140 +50,163 @@ class _LoginPageState extends State<LoginPage> {
 
   /// LOGIN FUNCTION DENGAN JWT TOKEN
   Future<void> login() async {
-    String username = userIdController.text.trim();
-    String password = passwordController.text.trim();
+  String username = userIdController.text.trim();
+  String password = passwordController.text.trim();
 
-    if (username.isEmpty || password.isEmpty) {
-      setState(() => message = "User ID dan Password wajib diisi!");
-      return;
-    }
+  print("==== DEBUG LOGIN START ====");
+  print("Username input: '$username'");
+  print("Password input: '${password.isNotEmpty ? '******' : ''}'");
 
-    setState(() => isLoading = true);
+  if (username.isEmpty || password.isEmpty) {
+    setState(() => message = "User ID dan Password wajib diisi!");
+    return;
+  }
 
-    // IP backend Laravel 
-    var url = Uri.parse('http://172.30.64.207:8000/api/login');
+  setState(() => isLoading = true);
 
-    try {
-      var response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': username,
-          'password': password,
-        }),
-      );
-      print(response);
+  var url = Uri.parse('http://172.30.64.121:8000/api/login');
 
-        setState(() => isLoading = false);
+  try {
+    var response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'username': username,
+        'password': password,
+      }),
+    );
 
-      if (response.statusCode == 200) {
-        var data = json.decode(response.body);
-        print(data);
-        if (data['success'] == true && data['data'] != null) {
-          // Ambil token dari backend
-          String token = data['data']['token'];
+    print("==== RAW HTTP RESPONSE ====");
+    print("Status Code: ${response.statusCode}");
+    print("Response Body: ${response.body}");
 
-          // Simpan token ke SharedPreferences
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('jwt_token', token);
+    setState(() => isLoading = false);
 
-          setState(() {
-            message = "Login berhasil! Selamat datang $username";
-          });
+    if (response.statusCode == 200) {
+      var data = json.decode(response.body);
 
-          // Kirim token ke halaman berikutnya jika diperlukan
-          if (username == "sample_cpo") {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeCPOPage(userId: username, token: token),
-              ),
-            ); 
-          } else if (username == "lab_cpo") {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeLabCPOPage(userId: username, token: token),
-              ),
-            );
-          } else if (username == "unloading_cpo") {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeUnloadingCPOPage(userId: username, token: token),
-              ),
-            );
-          } else if (username == "sample_pk") {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomePKPage(userId: username, token: token),
-              ),
-            );
-          } else if (username == "lab_pk") {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeLabPKPage(userId: username, token: token),
-              ),
-            );
-           } else if (username == "unloading_pk") {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeUnloadingPKPage(userId: username, token: token),
-              ),
-            );
-          } else if (username == "sample_pome") {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomePOMEPage(userId: username, token: token),
-              ),
-            );
-          } else if (username == "lab_pome") {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeLabPOMEPage(userId: username, token: token),
-              ),
-            );
-            } else if (username == "unloading_pome") {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeUnloadingPOMEPage(userId: username, token: token),
-              ),
-            );
-          // } else if (username == "LAB PK KPN") {
-          //   Navigator.push(
-          //     context,
-          //     MaterialPageRoute(
-          //       builder: (context) => HomeLabPKPage(userId: username, token: token),
-          //     ),
-          //   );
-          // } else {
-          //   ScaffoldMessenger.of(context).showSnackBar(
-          //     SnackBar(content: Text("Halaman untuk $username belum dibuat")),
-          //   );
-          }
-        } else {
-          setState(() {
-            message = "User ID atau Password salah!";
-          });
+      print("==== DECODED JSON ====");
+      print(data);
+
+      if (data['success'] == true && data['data'] != null) {
+        // Ambil token
+        String rawToken = data['data']['token'];
+        String token = "Bearer $rawToken";   // ← PENTING: tambah Bearer
+
+        print("==== TOKEN DEBUG ====");
+        print("Raw Token: $rawToken");
+        print("Final Token (with Bearer): $token");
+
+        // Simpan token ke SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', token);
+
+        print("==== SAVED TOKEN IN SHARED PREFS ====");
+        print(prefs.getString('jwt_token'));
+
+        setState(() {
+          message = "Login berhasil! Selamat datang $username";
+        });
+
+        print("==== NAVIGATION DEBUG ====");
+        print("Navigating for user: $username");
+        print("Token being passed: $token");
+
+        if (username == "sample_cpo") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  HomeCPOPage(userId: username, token: token),
+            ),
+          );
+        } else if (username == "lab_cpo") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  HomeLabCPOPage(userId: username, token: token),
+            ),
+          );
+        } else if (username == "unloading_cpo") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  HomeUnloadingCPOPage(userId: username, token: token),
+            ),
+          );
+        } else if (username == "sample_pk") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  HomePKPage(userId: username, token: token),
+            ),
+          );
+        } else if (username == "lab_pk") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  HomeLabPKPage(userId: username, token: token),
+            ),
+          );
+        } else if (username == "unloading_pk") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  HomeUnloadingPKPage(userId: username, token: token),
+            ),
+          );
+        } else if (username == "sample_pome") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  HomePOMEPage(userId: username, token: token),
+            ),
+          );
+        } else if (username == "lab_pome") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  HomeLabPOMEPage(userId: username, token: token),
+            ),
+          );
+        } else if (username == "unloading_pome") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  HomeUnloadingPOMEPage(userId: username, token: token),
+            ),
+          );
         }
       } else {
         setState(() {
-          message = "User ID atau Password salah! ${response.statusCode}\n${response.body}";
+          message = "User ID atau Password salah!";
         });
       }
-    } catch (e) {
+    } else {
       setState(() {
-        isLoading = false;
-        message = "Gagal koneksi ke server: $e";
+        message =
+            "User ID atau Password salah! ${response.statusCode}\n${response.body}";
       });
-    } 
+    }
+  } catch (e) {
+    setState(() {
+      isLoading = false;
+      message = "Gagal koneksi ke server: $e";
+    });
+
+    print("==== ERROR ====");
+    print(e);
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -233,7 +256,7 @@ class _LoginPageState extends State<LoginPage> {
                 controller: userIdController,
                 decoration: const InputDecoration(
                   labelText: 'User ID',
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder (),
                 ),
               ),
             ),

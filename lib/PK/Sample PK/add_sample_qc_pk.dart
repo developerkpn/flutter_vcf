@@ -80,7 +80,7 @@ class _AddSampleQCPKPageState extends State<AddSampleQCPKPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-       builder: (_) => AddPKDataPage(
+        builder: (_) => AddPKDataPage(
           userId: widget.userId,
           token: widget.token,
           registrationId: v.registration_id,
@@ -89,10 +89,14 @@ class _AddSampleQCPKPageState extends State<AddSampleQCPKPage> {
           vendorCode: v.vendor_code,
           vendorName: v.vendor_name,
           commodityCode: v.commodity_code,
-          commodityName: v.commodity_code,
+          commodityName: v.commodity_name,
         ),
       ),
-    );
+    ).then((value) {
+      if (value == true) {
+        Navigator.pop(context, true);
+      }
+    });
   }
 
 

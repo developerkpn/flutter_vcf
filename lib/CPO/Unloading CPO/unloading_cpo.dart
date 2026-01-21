@@ -145,9 +145,6 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
 
           final trucks = snapshot.data?.data ?? [];
 
-          // ==========================================
-          // FILTER MENGGUNAKAN NORMALIZED STATUS
-          // ==========================================
           final unloadingTrucks = trucks.where((e) {
             final normalized = normalizedStatus(
               (e.unloading_status ?? "").isNotEmpty
@@ -164,7 +161,7 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
                 "Belum ada tiket kendaraan.",
                 style: TextStyle(color: Colors.black54, fontSize: 16),
               ),
-            );
+             );
           }
 
           return ListView.builder(

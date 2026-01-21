@@ -135,15 +135,8 @@ class _AddPKDataPageState extends State<AddPKDataPage> {
 
     try {
       await api.submitQcSamplingPK("Bearer ${widget.token}", payload);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => SampleQCPKPage(
-            userId: widget.userId,
-            token: widget.token,
-          ),
-        ),
-      );
+
+      Navigator.pop(context, true);  
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Submit error: $e")));

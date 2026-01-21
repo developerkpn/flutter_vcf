@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:dio/dio.dart';
@@ -79,52 +80,56 @@ class _AddCPODataPageState extends State<AddCPODataPage> {
     }
   }
 
+
   Future<void> saveCpoSample() async {
-    try {
-      setState(() => _isLoading = true);
+  try {
+    FocusScope.of(context).unfocus(); 
+    setState(() => _isLoading = true);
 
-      final photos = <String>[];
-      for (final img in [_image1, _image2, _image3, _image4]) {
-        if (img != null) {
-          final bytes = await img.readAsBytes();
+    final photos = <String>[];
 
-          // backend hanya menerima RAW BASE64 (tanpa data:image/jpeg;base64,)
-          photos.add(base64Encode(bytes));
-        }
+    for (final img in [_image1, _image2, _image3, _image4]) {
+      if (img != null) {
+        final compressed = await compressImage(img);
+        final bytes = await compressed.readAsBytes();
+        photos.add(base64Encode(bytes));
       }
+    }
 
-      if (photos.isEmpty) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Ambil minimal 1 foto")),
-        );
-        return;
-      }
-
-      final payload = {
-        "registration_id": widget.registrationId,
-        "photos": photos, // RAW BASE64 ARRAY
-      };
-
-      final SubmitQcSamplingResponse res =
-          await api.submitQcSampling("Bearer ${widget.token}", payload);
-
+    if (photos.isEmpty) {
       setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ambil minimal 1 foto")),
+      );
+      return;
+    }
 
-      if (res.success && res.data?.photos != null) {
-        final urls = res.data!.photos!
-            .map((p) => p.url ?? "")
-            .where((url) => url.isNotEmpty)
-            .toList();
+    final payload = {
+      "registration_id": widget.registrationId,
+      "photos": photos,
+    };
 
-        setState(() {
-          _uploadedPhotoUrls = urls;
-        });
+    final SubmitQcSamplingResponse res =
+        await api.submitQcSampling("Bearer ${widget.token}", payload);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Sample tersimpan dan foto diupload")),
-        );
+    setState(() => _isLoading = false);
 
+    if (res.success && res.data?.photos != null) {
+      final urls = res.data!.photos!
+          .map((p) => p.url ?? "")
+          .where((url) => url.isNotEmpty)
+          .toList();
+
+      setState(() {
+        _uploadedPhotoUrls = urls;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Sample tersimpan dan foto diupload")),
+      );
+
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.pop(context, {
           "registration_id": widget.registrationId,
           "tiket_no": widget.tiketNo,
@@ -132,18 +137,32 @@ class _AddCPODataPageState extends State<AddCPODataPage> {
           "status": "done",
           "has_sampling_data": true,
         });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res.message ?? "Gagal simpan")),
-        );
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
+      });
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+        SnackBar(content: Text(res.message ?? "Gagal simpan")),
       );
     }
-  }
+  } catch (e) {
+    setState(() => _isLoading = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error: $e")),
+    );
+  } 
+}
+
+  
+Future<File> compressImage(File file) async {
+  final result = await FlutterImageCompress.compressAndGetFile(
+    file.absolute.path,
+    "${file.path}_compressed.jpg",
+    quality: 70,
+    minWidth: 1024,
+  );
+
+  return File(result!.path);
+}
+
 
   Future<void> _showConfirmDialog() async {
     final confirm = await showDialog<bool>(
@@ -227,18 +246,18 @@ class _AddCPODataPageState extends State<AddCPODataPage> {
               ),
 
               const SizedBox(height: 20),
-
+  
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  minimumSize: const Size.fromHeight(48),
-                ),
-                onPressed: _showConfirmDialog,
-                icon: const Icon(Icons.save),
-                label: const Text("Simpan Sample"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                minimumSize: const Size.fromHeight(48),
               ),
+              onPressed: _isLoading ? null : _showConfirmDialog,
+              icon: const Icon(Icons.save),
+              label: const Text("Simpan Sample"),
+            ),
 
-              const SizedBox(height: 20),
+                          const SizedBox(height: 20),
 
               if (_uploadedPhotoUrls.isNotEmpty) ...[
                 const Text(

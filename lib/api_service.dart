@@ -42,17 +42,18 @@ import 'package:flutter_vcf/models/pome/response/submit_lab_pome_response.dart';
 
 part 'api_service.g.dart';  
 
-@RestApi(baseUrl: 'http://172.30.64.207:8000/api/')
+@RestApi(baseUrl: 'http://172.30.64.121:8000/api/')
 abstract class ApiService {
   factory ApiService(Dio dio) = _ApiService;
 
 //CPO ==================== 
   //Sample CPO=============
   @GET("/qc/sampling/cpo/statistics")
+
   Future<QcSamplingCpoStatisticsResponse> getQcSamplingStats(
     @Header("Authorization") String token, {
     @Query("date_from") String? dateFrom,
-    @Query("date_to") String? dateTo,
+    @Query("date_to") String? dateTo, 
   });
 
   @GET("/qc/sampling/cpo/vehicles")
@@ -125,6 +126,7 @@ abstract class ApiService {
 
 
 
+
     // Master Data (Tank & Hole)
     @GET("/master/tanks")
     Future<MasterTankResponse> getAllTanks(
@@ -135,6 +137,7 @@ abstract class ApiService {
     Future<MasterHoleResponse> getAllHoles(
       @Header("Authorization") String token,
     );
+
 
 
 
@@ -171,7 +174,7 @@ abstract class ApiService {
   );
 
   @GET("/qc/lab/pome/{registrationId}")
-  Future<LabDetailResponse> getLabPomeDetail(
+  Future<LabDetailResponse> getLabPomeDetail( 
     @Header("Authorization") String token,
     @Path("registrationId") String registrationId,
   );
@@ -249,7 +252,7 @@ Future<QcSamplingPkVehiclesResponse> getQcSamplingPkVehicles(
     @Header("Authorization") String token,
   );
   
-    @POST("/qc/lab/pk/submit")
+  @POST("/qc/lab/pk/submit")
   Future<SubmitLabPkResponse> submitLabPk(
     @Header("Authorization") String token,
     @Body() Map<String, dynamic> payload,
@@ -285,7 +288,5 @@ Future<QcSamplingPkVehiclesResponse> getQcSamplingPkVehicles(
     @Header("Authorization") String token,
     @Body() Map<String, dynamic> payload,
   );
-
-
-
+  
 }

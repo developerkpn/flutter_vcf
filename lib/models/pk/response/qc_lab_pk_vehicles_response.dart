@@ -60,14 +60,14 @@ class QcLabPkVehicle {
   @JsonKey(name: "created_at")
   final String? createdAt;
 
-  @JsonKey(name: "bruto_weight")
-  final String? brutoWeight;
+  @JsonKey(name: "bruto_weight", fromJson: _toDouble)
+  final double? brutoWeight;
 
-  @JsonKey(name: "vendor_ffa")
-  final String? vendorFfa;
+  @JsonKey(name: "vendor_ffa", fromJson: _toDouble)
+  final double? vendorFfa;
 
-  @JsonKey(name: "vendor_moisture")
-  final String? vendorMoisture;
+  @JsonKey(name: "vendor_moisture", fromJson: _toDouble)
+  final double? vendorMoisture;
 
   @JsonKey(name: 'lab_status')
   final String? labStatus;
@@ -77,7 +77,6 @@ class QcLabPkVehicle {
 
   @JsonKey(name: 'counter')
   final int? counter;
-
 
   QcLabPkVehicle({
     this.registrationId,
@@ -104,4 +103,9 @@ class QcLabPkVehicle {
       _$QcLabPkVehicleFromJson(json);
 
   Map<String, dynamic> toJson() => _$QcLabPkVehicleToJson(this);
+
+  static double? _toDouble(dynamic v) {
+    if (v == null) return null;
+    return double.tryParse(v.toString());
+  }
 }

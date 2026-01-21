@@ -76,10 +76,7 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
           }
 
           final data = snapshot.data?.data ?? [];
-
-          // =============================
-          // FILTER: Hanya yang siap unloading
-          // =============================
+          
           final readyVehicles = data.where((e) {
             return (e.registStatus ?? "").toLowerCase() == "unloading";
           }).toList();

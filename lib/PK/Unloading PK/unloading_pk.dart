@@ -34,9 +34,16 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
     return prefs.getString("jwt_token") ?? widget.token;
   }
 
+
   String normalizedStatus(String? registStatus, String? unloadingStatus) {
-    final reg = (registStatus ?? "").toLowerCase().trim();
-    final unload = (unloadingStatus ?? "").toLowerCase().trim();
+    final reg = (registStatus ?? "").toLowerCase();
+    final unload = (unloadingStatus ?? "").toLowerCase();
+
+    // HOLD tahap unloading (sudah selesai resampling + relab)
+    if (reg == "unloading" && unload == "hold") return "hold_unloading";
+
+    // HOLD tahap resampling (baru mulai resampling)
+    if (reg == "qc_resampling" && unload == "hold") return "hold_resampling";
 
     if (reg == "qc_resampling") return "qc_resampling";
     if (reg == "wb_out") return "done";
@@ -46,10 +53,12 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
   }
 
 
-    String displayStatus(String status) {
+  String displayStatus(String status) {
     switch (status) {
-      case "hold":
-        return "HOLD";
+      case "hold_unloading":
+        return "HOLD (UNLOADING)";
+      case "hold_resampling":
+        return "HOLD (RESAMPLING)";
       case "qc_resampling":
         return "RESAMPLING";
       case "done":
@@ -59,13 +68,16 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
     }
   }
 
+
   Color statusColor(String status) {
     switch (status) {
-      case "hold":
+      case "hold_unloading":
         return Colors.orange;
+      case "hold_resampling":
+        return Colors.deepPurple;
       case "qc_resampling":
         return Colors.blue;
-      case "done":            
+      case "done":
         return Colors.green;
       default:
         return Colors.grey;
@@ -74,8 +86,10 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
 
   IconData statusIcon(String status) {
     switch (status) {
-      case "hold":
+      case "hold_unloading":
         return Icons.pause_circle_outline;
+      case "hold_resampling":
+        return Icons.repeat;
       case "qc_resampling":
         return Icons.refresh;
       case "done":
@@ -84,7 +98,6 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
         return Icons.help_outline;
     }
   }
-
 
   Future<void> _openAddPage() async {
     final result = await Navigator.push(
@@ -116,6 +129,8 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
     }
   }
 
+  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -145,9 +160,13 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
 
           final trucks = snapshot.data?.data ?? [];
 
+        
           final unloadingTrucks = trucks.where((e) {
             final status = normalizedStatus(e.registStatus, e.unloadingStatus);
-            return status == "qc_resampling" || status == "done";
+            return status == "qc_resampling" ||
+                status == "hold_unloading" ||
+                status == "hold_resampling" ||
+                status == "done";
           }).toList();
 
           if (unloadingTrucks.isEmpty) {
@@ -156,20 +175,20 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
                 "Belum ada tiket kendaraan.",
                 style: TextStyle(color: Colors.black54, fontSize: 16),
               ),
-            );
+            ); 
           }
 
           return ListView.builder(
             itemCount: unloadingTrucks.length,
             itemBuilder: (_, index) {
               final t = unloadingTrucks[index];
-
-              final status =
-                  normalizedStatus(t.registStatus, t.unloadingStatus);
+              final status = normalizedStatus(t.registStatus, t.unloadingStatus);
 
               return GestureDetector(
                 onTap: () {
-                  if (status == "hold" || status == "qc_resampling") {
+                  if (status == "hold_unloading" ||
+                      status == "hold_resampling" ||
+                      status == "qc_resampling") {
                     _openEditPage(t, index);
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(

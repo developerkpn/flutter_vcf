@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'login.dart'; 
+import 'login.dart';
+import 'Manager/CPO/home_manager.dart'; 
 void main() {
   runApp(const VCFApp());
 }
@@ -16,7 +17,7 @@ class VCFApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const LoginPage(), // langsung arahkan ke login.dart
+      home: const LoginPage(), 
     );
   }
 }

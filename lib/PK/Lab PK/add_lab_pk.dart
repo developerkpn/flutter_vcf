@@ -19,7 +19,7 @@ class AddLabPKPage extends StatefulWidget {
 }
 
 class _AddLabPKPageState extends State<AddLabPKPage> {
-  String? selectedPlat;
+  String? selectedRegId;
   List<QcLabPkVehicle> platList = [];
   bool isLoading = true;
 
@@ -44,22 +44,11 @@ class _AddLabPKPageState extends State<AddLabPKPage> {
       final token = await _getToken();
       final res = await api.getQcLabPkVehicles("Bearer $token");
 
-      // Filter: hanya PK yang siap QC Lab
       final vehicles = (res.data ?? []).where((v) {
         final regist = (v.registStatus ?? "").toLowerCase();
         final lab = v.labStatus;
-
         return regist == "qc_lab" && (lab == null || lab.isEmpty);
       }).toList();
-
-      if (vehicles.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Tidak ada kendaraan yang siap diuji lab."),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
 
       setState(() {
         platList = vehicles;
@@ -112,36 +101,37 @@ class _AddLabPKPageState extends State<AddLabPKPage> {
                       ),
                       const SizedBox(height: 10),
 
-                      // DROPDOWN PILIH PLAT
+                      /// DROPDOWN
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           labelText: 'Plat Kendaraan',
                         ),
-                        value: selectedPlat,
+                        value: selectedRegId,
                         items: platList.map((v) {
                           return DropdownMenuItem<String>(
-                            value: v.plateNumber,
-                            child: Text(
-                                "${v.plateNumber} (${v.wbTicketNo ?? '-'})"),
+                            value: v.registrationId, 
+                            child: Text("${v.plateNumber} (${v.wbTicketNo ?? '-'})"),
                           );
                         }).toList(),
-                        onChanged: (value) =>
-                            setState(() => selectedPlat = value),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedRegId = value;
+                          });
+                        },
                       ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 30),
 
-                      // BUTTON MULAI
                       Center(
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.arrow_forward),
                           label: const Text("Mulai QC Lab"),
-                          onPressed: selectedPlat == null
+                          onPressed: selectedRegId == null
                               ? null
                               : () {
-                                  final selectedVehicle = platList.firstWhere(
-                                      (x) => x.plateNumber == selectedPlat);
+                                  final selectedVehicle =
+                                      platList.firstWhere((x) => x.registrationId == selectedRegId);
 
                                   _openInputPage(selectedVehicle);
                                 },
