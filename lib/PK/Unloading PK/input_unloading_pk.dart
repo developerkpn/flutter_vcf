@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/api_service.dart';
+import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/master/response/master_hole_response.dart';
 import 'package:flutter_vcf/models/master/response/master_tank_response.dart';
 import 'package:flutter_vcf/models/pk/unloading_pk_model.dart';
@@ -58,13 +59,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   @override
   void initState() {
     super.initState();
-    _dio = Dio()
-      ..interceptors.add(LogInterceptor(
-        request: true,
-        requestHeader: true,
-        requestBody: true,
-        responseBody: true,
-      ));
+    _dio = AppConfig.createDio(withLogging: true);
     api = ApiService(_dio);
     _loadMasterData().whenComplete(() => _loadExistingUnloading());
   }

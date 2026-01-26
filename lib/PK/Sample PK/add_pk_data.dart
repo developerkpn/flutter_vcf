@@ -7,6 +7,7 @@ import 'package:flutter_vcf/PK/Sample%20PK/sample_qc_pk.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_vcf/api_service.dart';
+import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/pk/response/qc_sampling_pk_sample_response.dart';
 
 class AddPKDataPage extends StatefulWidget {
@@ -52,7 +53,7 @@ class _AddPKDataPageState extends State<AddPKDataPage> {
   @override
   void initState() {
     super.initState();
-    api = ApiService(Dio());
+    api = ApiService(AppConfig.createDio());
     loadDetail();
   }
 

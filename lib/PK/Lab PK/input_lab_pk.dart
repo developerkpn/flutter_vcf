@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_vcf/api_service.dart';
+import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/pk/response/qc_lab_pk_vehicles_response.dart';
 
 class InputLabPKPage extends StatefulWidget {
@@ -64,16 +65,7 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
   void initState() {
     super.initState();
 
-    final dio = Dio()
-      ..interceptors.add(
-        LogInterceptor(
-          requestBody: true,
-          responseBody: true,
-          logPrint: (obj) => debugPrint(obj.toString()),
-        ),
-      );
-
-    api = ApiService(dio);
+    api = ApiService(AppConfig.createDio(withLogging: true));
 
     final status = _derivePkStatus(widget.model);
     isHoldCase = status == "hold";
