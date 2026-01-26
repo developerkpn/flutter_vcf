@@ -3,6 +3,25 @@ import 'package:json_annotation/json_annotation.dart';
 part 'manager_check_ticket.g.dart';
 
 @JsonSerializable()
+class PreviousCheck {
+  final String? stage;
+  final String? check_status;
+  final String? checked_by;
+  final String? checked_at;
+
+  PreviousCheck({
+    this.stage,
+    this.check_status,
+    this.checked_by,
+    this.checked_at,
+  });
+
+  factory PreviousCheck.fromJson(Map<String, dynamic> json) =>
+      _$PreviousCheckFromJson(json);
+  Map<String, dynamic> toJson() => _$PreviousCheckToJson(this);
+}
+
+@JsonSerializable()
 class ManagerCheckTicket {
   final String? process_id;
   final String? registration_id;
@@ -16,6 +35,7 @@ class ManagerCheckTicket {
   final bool? has_manager_check;
   final int? manager_checks_count;
   final String? latest_check_status;
+  final List<PreviousCheck>? previous_checks;
 
   ManagerCheckTicket({
     this.process_id,
@@ -30,6 +50,7 @@ class ManagerCheckTicket {
     this.has_manager_check,
     this.manager_checks_count,
     this.latest_check_status,
+    this.previous_checks,
   });
 
   factory ManagerCheckTicket.fromJson(Map<String, dynamic> json) =>
