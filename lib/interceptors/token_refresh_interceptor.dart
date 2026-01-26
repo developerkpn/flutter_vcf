@@ -10,129 +10,144 @@ class TokenRefreshInterceptor extends Interceptor {
   _pendingRequests = [];
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) async {
-    // Only handle 401 errors
-    if (err.response?.statusCode == 401) {
-      final requestOptions = err.requestOptions;
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    _handleError(err, handler);
+  }
 
-      // Skip refresh for login/refresh endpoints to avoid infinite loops
-      if (requestOptions.path.contains('/login') ||
-          requestOptions.path.contains('/refresh')) {
-        return handler.next(err);
-      }
+  Future<void> _handleError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    try {
+      // Only handle 401 errors
+      if (err.response?.statusCode == 401) {
+        final requestOptions = err.requestOptions;
 
-      // If already refreshing, queue this request
-      if (_isRefreshing) {
-        _pendingRequests.add((options: requestOptions, handler: handler));
-        return;
-      }
+        // Skip refresh for login/refresh endpoints to avoid infinite loops
+        if (requestOptions.path.contains('/login') ||
+            requestOptions.path.contains('/refresh')) {
+          return handler.next(err);
+        }
 
-      _isRefreshing = true;
+        // If already refreshing, queue this request
+        if (_isRefreshing) {
+          _pendingRequests.add((options: requestOptions, handler: handler));
+          return;
+        }
 
-      try {
-        // Get current token
-        final prefs = await SharedPreferences.getInstance();
-        final currentToken = prefs.getString('jwt_token');
+        _isRefreshing = true;
 
-        if (currentToken == null || currentToken.isEmpty) {
-          print('[TokenRefresh] No token found, cannot refresh');
+        try {
+          // Get current token
+          final prefs = await SharedPreferences.getInstance();
+          final currentToken = prefs.getString('jwt_token');
+
+          if (currentToken == null || currentToken.isEmpty) {
+            print('[TokenRefresh] No token found, cannot refresh');
+            _isRefreshing = false;
+            _rejectPendingRequests(err);
+            return handler.next(err);
+          }
+
+          print(
+            '[TokenRefresh] Attempting to refresh token for: ${requestOptions.path}',
+          );
+
+          // Attempt to refresh token
+          final refreshDio = Dio(
+            BaseOptions(
+              baseUrl: AppConfig.apiBaseUrl,
+              contentType: 'application/json',
+            ),
+          );
+
+          final response = await refreshDio.post(
+            '/refresh',
+            options: Options(
+              headers: {'Authorization': 'Bearer $currentToken'},
+            ),
+          );
+
+          if (response.statusCode == 200) {
+            final data = response.data;
+
+            if (data['success'] == true && data['data'] != null) {
+              // Extract new token (raw, without Bearer prefix)
+              final newToken = data['data']['token'];
+
+              print('[TokenRefresh] Token refreshed successfully');
+
+              // Save raw token (Bearer prefix added when making API calls)
+              await prefs.setString('jwt_token', newToken);
+
+              // Retry original request with new token
+              final opts = requestOptions.copyWith(
+                headers: {
+                  ...requestOptions.headers,
+                  'Authorization': 'Bearer $newToken',
+                },
+              );
+
+              try {
+                print(
+                  '[TokenRefresh] Retrying original request: ${requestOptions.path}',
+                );
+                final retryResponse = await _refreshDio.fetch(opts);
+                _isRefreshing = false;
+
+                // Resolve pending requests
+                _resolvePendingRequests('Bearer $newToken');
+
+                print('[TokenRefresh] Request retry successful');
+                return handler.resolve(
+                  Response(
+                    data: retryResponse.data,
+                    statusCode: retryResponse.statusCode,
+                    statusMessage: retryResponse.statusMessage,
+                    requestOptions: requestOptions,
+                  ),
+                );
+              } catch (e) {
+                print('[TokenRefresh] Retry failed: $e');
+                _isRefreshing = false;
+                _rejectPendingRequests(err);
+                return handler.next(err);
+              }
+            } else {
+              print(
+                '[TokenRefresh] Refresh response invalid: ${data['message'] ?? 'Unknown error'}',
+              );
+            }
+          } else {
+            print(
+              '[TokenRefresh] Refresh failed with status: ${response.statusCode}',
+            );
+          }
+
+          // Refresh failed - clear token and reject
+          await prefs.remove('jwt_token');
+          _isRefreshing = false;
+          _rejectPendingRequests(err);
+          return handler.next(err);
+        } catch (e) {
+          // Refresh failed - clear token
+          print('[TokenRefresh] Exception during refresh: $e');
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('jwt_token');
+
           _isRefreshing = false;
           _rejectPendingRequests(err);
           return handler.next(err);
         }
-
-        print(
-          '[TokenRefresh] Attempting to refresh token for: ${requestOptions.path}',
-        );
-
-        // Attempt to refresh token
-        final refreshDio = Dio(
-          BaseOptions(
-            baseUrl: AppConfig.apiBaseUrl,
-            contentType: 'application/json',
-          ),
-        );
-
-        final response = await refreshDio.post(
-          '/refresh',
-          options: Options(headers: {'Authorization': 'Bearer $currentToken'}),
-        );
-
-        if (response.statusCode == 200) {
-          final data = response.data;
-
-          if (data['success'] == true && data['data'] != null) {
-            // Extract new token (raw, without Bearer prefix)
-            final newToken = data['data']['token'];
-
-            print('[TokenRefresh] Token refreshed successfully');
-
-            // Save raw token (Bearer prefix added when making API calls)
-            await prefs.setString('jwt_token', newToken);
-
-            // Retry original request with new token
-            final opts = requestOptions.copyWith(
-              headers: {
-                ...requestOptions.headers,
-                'Authorization': 'Bearer $newToken',
-              },
-            );
-
-            try {
-              print(
-                '[TokenRefresh] Retrying original request: ${requestOptions.path}',
-              );
-              final retryResponse = await _refreshDio.fetch(opts);
-              _isRefreshing = false;
-
-              // Resolve pending requests
-              _resolvePendingRequests('Bearer $newToken');
-
-              print('[TokenRefresh] Request retry successful');
-              return handler.resolve(
-                Response(
-                  data: retryResponse.data,
-                  statusCode: retryResponse.statusCode,
-                  statusMessage: retryResponse.statusMessage,
-                  requestOptions: requestOptions,
-                ),
-              );
-            } catch (e) {
-              print('[TokenRefresh] Retry failed: $e');
-              _isRefreshing = false;
-              _rejectPendingRequests(err);
-              return handler.next(err);
-            }
-          } else {
-            print(
-              '[TokenRefresh] Refresh response invalid: ${data['message'] ?? 'Unknown error'}',
-            );
-          }
-        } else {
-          print(
-            '[TokenRefresh] Refresh failed with status: ${response.statusCode}',
-          );
-        }
-
-        // Refresh failed - clear token and reject
-        await prefs.remove('jwt_token');
-        _isRefreshing = false;
-        _rejectPendingRequests(err);
-        return handler.next(err);
-      } catch (e) {
-        // Refresh failed - clear token
-        print('[TokenRefresh] Exception during refresh: $e');
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('jwt_token');
-
-        _isRefreshing = false;
-        _rejectPendingRequests(err);
-        return handler.next(err);
       }
-    }
 
-    // Not a 401 error, pass through
-    return handler.next(err);
+      // Not a 401 error, pass through
+      return handler.next(err);
+    } catch (e) {
+      // Ensure the handler is always called, even on unexpected errors
+      print('[TokenRefresh] Unexpected error in _handleError: $e');
+      handler.next(err);
+    }
   }
 
   void _resolvePendingRequests(String newToken) {

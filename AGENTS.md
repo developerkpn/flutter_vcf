@@ -10,7 +10,7 @@ Flutter mobile app for palm oil mill operators. Handles QC sampling, lab testing
 
 ## STRUCTURE
 
-```
+```text
 lib/
 ├── main.dart              # App entry, MaterialApp setup
 ├── login.dart             # Auth screen + navigation hub

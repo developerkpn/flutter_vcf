@@ -8,10 +8,13 @@ class AppConfig {
   // ============================================================
   // CHANGE THIS for production deployment
   // ============================================================
-  static const String productionUrl = 'http://your-server.com/api/';
+  static const String productionUrl = 'https://your-server.com/api/';
 
-  /// Set to false for production builds
-  static const bool useLocalDev = true;
+  /// Set via --dart-define=USE_LOCAL_DEV=true (defaults to false for production)
+  static const bool useLocalDev = bool.fromEnvironment(
+    'USE_LOCAL_DEV',
+    defaultValue: false,
+  );
 
   /// Auto-detects the correct URL based on platform
   /// - Android emulator: 10.0.2.2 (special IP to reach host)
