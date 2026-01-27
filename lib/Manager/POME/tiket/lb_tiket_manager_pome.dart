@@ -51,11 +51,13 @@ class _LbTiketManagerPOMEPageState extends State<LbTiketManagerPOMEPage> {
         stage: "lab",
       );
 
+      if (!mounted) return;
       setState(() {
         tickets = res.data ?? [];
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       ScaffoldMessenger.of(
         context,
@@ -256,17 +258,32 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   }
 
   Future<void> _loadDetail() async {
+    final registrationId = widget.ticket.registration_id;
+    if (registrationId == null) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Registration ID is missing"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     try {
       final res = await api.getManagerCheckTicketDetail(
         "Bearer ${widget.token}",
-        widget.ticket.registration_id!,
+        registrationId,
         "lab",
       );
+      if (!mounted) return;
       setState(() {
         detail = res.data;
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       ScaffoldMessenger.of(
         context,
@@ -298,6 +315,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         // POME does NOT have mgr_dobi or mgr_iv
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Check submitted: $status"),
@@ -306,6 +324,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
       );
       widget.onComplete();
     } on DioException catch (e) {
+      if (!mounted) return;
       setState(() => isSubmitting = false);
 
       if (e.response?.statusCode == 409) {
@@ -326,6 +345,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         ),
       );
     } on FormatException {
+      if (!mounted) return;
       setState(() => isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -334,6 +354,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       setState(() => isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),

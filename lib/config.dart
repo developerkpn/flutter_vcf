@@ -20,12 +20,18 @@ class AppConfig {
   /// - Android emulator: 10.0.2.2 (special IP to reach host)
   /// - iOS simulator/macOS: localhost works directly
   static String get apiBaseUrl {
-    if (!useLocalDev) return productionUrl;
+    final url = useLocalDev
+        ? (Platform.isAndroid
+              ? 'http://10.0.2.2:8000/api/'
+              : 'http://localhost:8000/api/')
+        : productionUrl;
 
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8000/api/';
-    }
-    return 'http://localhost:8000/api/';
+    // Log configuration on first access (helps with debugging)
+    print('🔧 [CONFIG] API Base URL: $url');
+    print('🔧 [CONFIG] Use Local Dev: $useLocalDev');
+    print('🔧 [CONFIG] Platform: ${Platform.operatingSystem}');
+
+    return url;
   }
 
   /// Creates a Dio instance with baseUrl pre-configured

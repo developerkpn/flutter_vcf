@@ -66,11 +66,13 @@ class _UnTiketManagerPKPageState extends State<UnTiketManagerPKPage> {
         stage: "unloading",
       );
 
+      if (!mounted) return;
       setState(() {
         tickets = res.data ?? [];
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       ScaffoldMessenger.of(
         context,
@@ -329,16 +331,31 @@ class _ManagerUnloadingCheckInputPageState
   }
 
   Future<void> _loadData() async {
+    final registrationId = widget.ticket.registration_id;
+    if (registrationId == null) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Registration ID is missing"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     try {
       final futures = await Future.wait([
         api.getAllTanks("Bearer ${widget.token}"),
         api.getAllHoles("Bearer ${widget.token}"),
         api.getManagerCheckTicketDetail(
           "Bearer ${widget.token}",
-          widget.ticket.registration_id!,
+          registrationId,
           "unloading",
         ),
       ]);
+
+      if (!mounted) return;
 
       final tankRes = futures[0] as MasterTankResponse;
       final holeRes = futures[1] as MasterHoleResponse;
@@ -351,6 +368,7 @@ class _ManagerUnloadingCheckInputPageState
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       ScaffoldMessenger.of(
         context,
@@ -380,6 +398,7 @@ class _ManagerUnloadingCheckInputPageState
         "mgr_hole_id": selectedHoleId,
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Check submitted: $status"),
@@ -388,6 +407,7 @@ class _ManagerUnloadingCheckInputPageState
       );
       widget.onComplete();
     } on DioException catch (e) {
+      if (!mounted) return;
       setState(() => isSubmitting = false);
 
       if (e.response?.statusCode == 409) {
@@ -408,6 +428,7 @@ class _ManagerUnloadingCheckInputPageState
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       setState(() => isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),

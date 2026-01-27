@@ -49,6 +49,11 @@ class TokenRefreshInterceptor extends Interceptor {
             return handler.next(err);
           }
 
+          // Normalize token: strip Bearer prefix if present (defensive for old tokens)
+          final normalizedToken = currentToken.startsWith('Bearer ')
+              ? currentToken.substring(7)
+              : currentToken;
+
           print(
             '[TokenRefresh] Attempting to refresh token for: ${requestOptions.path}',
           );
@@ -64,7 +69,7 @@ class TokenRefreshInterceptor extends Interceptor {
           final response = await refreshDio.post(
             '/refresh',
             options: Options(
-              headers: {'Authorization': 'Bearer $currentToken'},
+              headers: {'Authorization': 'Bearer $normalizedToken'},
             ),
           );
 

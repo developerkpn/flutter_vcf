@@ -64,11 +64,13 @@ class _LbTiketManagerPKPageState extends State<LbTiketManagerPKPage> {
         stage: "lab",
       );
 
+      if (!mounted) return;
       setState(() {
         tickets = res.data ?? [];
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       ScaffoldMessenger.of(
         context,
@@ -330,17 +332,32 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   }
 
   Future<void> _loadDetail() async {
+    final registrationId = widget.ticket.registration_id;
+    if (registrationId == null) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Registration ID is missing"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     try {
       final res = await api.getManagerCheckTicketDetail(
         "Bearer ${widget.token}",
-        widget.ticket.registration_id!,
+        registrationId,
         "lab",
       );
+      if (!mounted) return;
       setState(() {
         detail = res.data;
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       ScaffoldMessenger.of(
         context,
@@ -351,19 +368,33 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   Future<void> _submit(String status) async {
     debugPrint('[Manager Lab Check PK] Starting submission');
     debugPrint('[Manager Lab Check PK] Status: $status');
-    debugPrint('[Manager Lab Check PK] Process ID: ${widget.ticket.process_id}');
-    debugPrint('[Manager Lab Check PK] Registration ID: ${widget.ticket.registration_id}');
+    debugPrint(
+      '[Manager Lab Check PK] Process ID: ${widget.ticket.process_id}',
+    );
+    debugPrint(
+      '[Manager Lab Check PK] Registration ID: ${widget.ticket.registration_id}',
+    );
 
     // Validate required fields (PK: FFA, Moisture, Dirt, Oil Content)
     if (ffaCtrl.text.isEmpty ||
         moistCtrl.text.isEmpty ||
         dirtCtrl.text.isEmpty ||
         oilContentCtrl.text.isEmpty) {
-      debugPrint('[Manager Lab Check PK] Validation failed: Empty required fields');
-      debugPrint('[Manager Lab Check PK] FFA: ${ffaCtrl.text.isEmpty ? "EMPTY" : ffaCtrl.text}');
-      debugPrint('[Manager Lab Check PK] Moisture: ${moistCtrl.text.isEmpty ? "EMPTY" : moistCtrl.text}');
-      debugPrint('[Manager Lab Check PK] Dirt: ${dirtCtrl.text.isEmpty ? "EMPTY" : dirtCtrl.text}');
-      debugPrint('[Manager Lab Check PK] Oil Content: ${oilContentCtrl.text.isEmpty ? "EMPTY" : oilContentCtrl.text}');
+      debugPrint(
+        '[Manager Lab Check PK] Validation failed: Empty required fields',
+      );
+      debugPrint(
+        '[Manager Lab Check PK] FFA: ${ffaCtrl.text.isEmpty ? "EMPTY" : ffaCtrl.text}',
+      );
+      debugPrint(
+        '[Manager Lab Check PK] Moisture: ${moistCtrl.text.isEmpty ? "EMPTY" : moistCtrl.text}',
+      );
+      debugPrint(
+        '[Manager Lab Check PK] Dirt: ${dirtCtrl.text.isEmpty ? "EMPTY" : dirtCtrl.text}',
+      );
+      debugPrint(
+        '[Manager Lab Check PK] Oil Content: ${oilContentCtrl.text.isEmpty ? "EMPTY" : oilContentCtrl.text}',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("All lab fields are required"),
@@ -381,7 +412,9 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
       mgrDirt = double.parse(dirtCtrl.text);
       mgrOilContent = double.parse(oilContentCtrl.text);
     } on FormatException catch (e) {
-      debugPrint('[Manager Lab Check PK] FormatException: Invalid number format');
+      debugPrint(
+        '[Manager Lab Check PK] FormatException: Invalid number format',
+      );
       debugPrint('[Manager Lab Check PK] Error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -458,6 +491,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
 
       debugPrint('[Manager Lab Check PK] API request successful');
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Check submitted: $status"),
@@ -466,18 +500,27 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
       );
       widget.onComplete();
     } on DioException catch (e) {
+      if (!mounted) return;
       setState(() => isSubmitting = false);
 
       debugPrint('[Manager Lab Check PK] DioException occurred');
       debugPrint('[Manager Lab Check PK] Error type: ${e.type}');
       debugPrint('[Manager Lab Check PK] Error message: ${e.message}');
-      debugPrint('[Manager Lab Check PK] Status code: ${e.response?.statusCode}');
+      debugPrint(
+        '[Manager Lab Check PK] Status code: ${e.response?.statusCode}',
+      );
       debugPrint('[Manager Lab Check PK] Response data: ${e.response?.data}');
-      debugPrint('[Manager Lab Check PK] Request options: ${e.requestOptions.uri}');
-      debugPrint('[Manager Lab Check PK] Request data: ${e.requestOptions.data}');
+      debugPrint(
+        '[Manager Lab Check PK] Request options: ${e.requestOptions.uri}',
+      );
+      debugPrint(
+        '[Manager Lab Check PK] Request data: ${e.requestOptions.data}',
+      );
 
       if (e.response?.statusCode == 409) {
-        debugPrint('[Manager Lab Check PK] 409 Conflict: Ticket already checked');
+        debugPrint(
+          '[Manager Lab Check PK] 409 Conflict: Ticket already checked',
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("This ticket has already been checked"),
@@ -488,7 +531,8 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         return;
       }
 
-      final errorMessage = e.response?.data?['message'] ?? e.message ?? 'Unknown error';
+      final errorMessage =
+          e.response?.data?['message'] ?? e.message ?? 'Unknown error';
       debugPrint('[Manager Lab Check PK] Showing error to user: $errorMessage');
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -498,13 +542,18 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         ),
       );
     } on FormatException catch (e) {
+      if (!mounted) return;
       setState(() => isSubmitting = false);
-      debugPrint('[Manager Lab Check PK] FormatException: Invalid number format');
+      debugPrint(
+        '[Manager Lab Check PK] FormatException: Invalid number format',
+      );
       debugPrint('[Manager Lab Check PK] Error: $e');
       debugPrint('[Manager Lab Check PK] FFA text: "${ffaCtrl.text}"');
       debugPrint('[Manager Lab Check PK] Moisture text: "${moistCtrl.text}"');
       debugPrint('[Manager Lab Check PK] Dirt text: "${dirtCtrl.text}"');
-      debugPrint('[Manager Lab Check PK] Oil Content text: "${oilContentCtrl.text}"');
+      debugPrint(
+        '[Manager Lab Check PK] Oil Content text: "${oilContentCtrl.text}"',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Invalid number format"),
@@ -512,6 +561,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         ),
       );
     } catch (e, stackTrace) {
+      if (!mounted) return;
       setState(() => isSubmitting = false);
       debugPrint('[Manager Lab Check PK] Unexpected exception: $e');
       debugPrint('[Manager Lab Check PK] Stack trace: $stackTrace');
