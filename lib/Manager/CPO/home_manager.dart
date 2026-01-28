@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/Manager/CPO/tiket/lb_tiket_manager_cpo.dart';
 import 'package:flutter_vcf/Manager/CPO/tiket/sp_tiket_manager_cpo.dart';
@@ -5,10 +7,10 @@ import 'package:flutter_vcf/Manager/CPO/tiket/un_tiket_manager_cpo.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../login.dart';
-import 'dart:async';
-import '../POME/home_manager_pome.dart';
 import '../PK/home_manager_pk.dart';
+import '../POME/home_manager_pome.dart';
 import 'data_truk_cpo.dart';
 
 class ManagerHomeSwipe extends StatefulWidget {
@@ -46,8 +48,18 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
   String getTanggalIndonesia() {
     final now = DateTime.now();
     const bulan = [
-      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
     ];
     return "${now.day} ${bulan[now.month - 1]} ${now.year}";
   }
@@ -111,14 +123,16 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
     try {
       final prefs = await SharedPreferences.getInstance();
       String? savedToken =
-        prefs.getString("jwt_token") ?? prefs.getString("token");
-
+          prefs.getString("jwt_token") ?? prefs.getString("token");
 
       if (savedToken == null) {
         return;
       }
 
-      String token = "Bearer $savedToken";
+      // Normalize token: strip Bearer prefix if present, then add it
+      String token = savedToken.startsWith("Bearer ")
+          ? savedToken
+          : "Bearer $savedToken";
 
       final now = DateTime.now();
       String dateFrom = "${now.year}-01-01";
@@ -169,8 +183,7 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
         totalSampleKeluar =
             sampleStats.data?.statistics?.total_truk_keluar ?? 0;
 
-        totalLabKeluar =
-            labStats.data?.statistics?.total_truk_keluar ?? 0;
+        totalLabKeluar = labStats.data?.statistics?.total_truk_keluar ?? 0;
 
         totalUnloadingKeluar =
             unloadingStats.data?.statistics?.total_truk_keluar ?? 0;
@@ -188,9 +201,21 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
         }
 
         // Count pending checks (tickets without manager check)
-        samplingPendingChecks = samplingTickets.data?.where((t) => !(t.has_manager_check ?? false)).length ?? 0;
-        labPendingChecks = labTickets.data?.where((t) => !(t.has_manager_check ?? false)).length ?? 0;
-        unloadingPendingChecks = unloadingTickets.data?.where((t) => !(t.has_manager_check ?? false)).length ?? 0;
+        samplingPendingChecks =
+            samplingTickets.data
+                ?.where((t) => !(t.has_manager_check ?? false))
+                .length ??
+            0;
+        labPendingChecks =
+            labTickets.data
+                ?.where((t) => !(t.has_manager_check ?? false))
+                .length ??
+            0;
+        unloadingPendingChecks =
+            unloadingTickets.data
+                ?.where((t) => !(t.has_manager_check ?? false))
+                .length ??
+            0;
       });
     } catch (e) {
       print("ERROR LOAD STATISTICS: $e");
@@ -254,14 +279,20 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                 if (value == halamanAktif) return;
 
                 if (value == "CPO") {
-                  Navigator.pushReplacement(context,
-                      MaterialPageRoute(builder: (_) => const ManagerHomeSwipe()));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ManagerHomeSwipe()),
+                  );
                 } else if (value == "POME") {
-                  Navigator.pushReplacement(context,
-                      MaterialPageRoute(builder: (_) => const HomeManagerPome()));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HomeManagerPome()),
+                  );
                 } else if (value == "PK") {
-                  Navigator.pushReplacement(context,
-                      MaterialPageRoute(builder: (_) => const HomeManagerPk()));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HomeManagerPk()),
+                  );
                 }
               },
               itemBuilder: (context) => [
@@ -281,7 +312,9 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                   child: Text(
                     "POME",
                     style: TextStyle(
-                      color: halamanAktif == "POME" ? Colors.grey : Colors.black,
+                      color: halamanAktif == "POME"
+                          ? Colors.grey
+                          : Colors.black,
                     ),
                   ),
                 ),
@@ -296,7 +329,11 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                   ),
                 ),
               ],
-              child: const Icon(Icons.arrow_drop_down, color: Colors.white, size: 34),
+              child: const Icon(
+                Icons.arrow_drop_down,
+                color: Colors.white,
+                size: 34,
+              ),
             ),
           ],
         ),
@@ -317,8 +354,10 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
           children: [
             const DrawerHeader(
               decoration: BoxDecoration(color: Colors.blue),
-              child:
-                  Text("Menu VCF", style: TextStyle(color: Colors.white, fontSize: 18)),
+              child: Text(
+                "Menu VCF",
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
             ),
             ListTile(
               leading: const Icon(Icons.logout),
@@ -341,8 +380,10 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Hai, Manager 👋",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              const Text(
+                "Hai, Manager 👋",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 4),
               Text(
                 "Selamat datang di VEHICLE CONTROL SYSTEM",
@@ -353,9 +394,13 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
               Center(
                 child: Column(
                   children: [
-                    const Text("QC Sample CPO",
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700)),
+                    const Text(
+                      "QC Sample CPO",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Container(
                       height: 3,
@@ -413,11 +458,19 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                       },
                     ),
                     Positioned(
-                        left: 0,
-                        child: _circleNavBtn(Icons.chevron_left_rounded, prevPage)),
+                      left: 0,
+                      child: _circleNavBtn(
+                        Icons.chevron_left_rounded,
+                        prevPage,
+                      ),
+                    ),
                     Positioned(
-                        right: 0,
-                        child: _circleNavBtn(Icons.chevron_right_rounded, nextPage)),
+                      right: 0,
+                      child: _circleNavBtn(
+                        Icons.chevron_right_rounded,
+                        nextPage,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -441,17 +494,25 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                         physics: const NeverScrollableScrollPhysics(),
                         onPageChanged: (i) => setState(() => infoIndex = i),
                         children: [
-                          _infoCard("Total Sample Truk Keluar",
-                              "$totalSampleKeluar"),
                           _infoCard(
-                              "Total LAB Truk Keluar", "$totalLabKeluar"),
-                          _infoCard("Total Unloading Truk Keluar",
-                              "$totalUnloadingKeluar"),
+                            "Total Sample Truk Keluar",
+                            "$totalSampleKeluar",
+                          ),
+                          _infoCard("Total LAB Truk Keluar", "$totalLabKeluar"),
+                          _infoCard(
+                            "Total Unloading Truk Keluar",
+                            "$totalUnloadingKeluar",
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: _infoCard("Tanggal Hari Ini", getTanggalIndonesia())),
+                    Expanded(
+                      child: _infoCard(
+                        "Tanggal Hari Ini",
+                        getTanggalIndonesia(),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -486,12 +547,23 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title,
-              style: const TextStyle(fontSize: 11, color: Colors.grey, height: 1.2)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.grey,
+              height: 1.2,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.bold, height: 1.2)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              height: 1.2,
+            ),
+          ),
         ],
       ),
     );
@@ -509,7 +581,7 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
             color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
             offset: const Offset(0, 3),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -530,8 +602,10 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                     alignment: Alignment.center,
                     child: const Text(
                       "Input Data CPO",
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -543,7 +617,8 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => const DataTrukCpoPage()),
+                        builder: (_) => const DataTrukCpoPage(),
+                      ),
                     );
                   },
                   child: Container(
@@ -556,9 +631,10 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                     child: const Text(
                       "Cek Total Truk",
                       style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -596,50 +672,49 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
 
                       const SizedBox(height: 10),
                       _optionItem(
-                      "QC Lab",
-                      Icons.biotech,
-                      onTap: () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        final token =
-                            prefs.getString("jwt_token") ??
-                            prefs.getString("token") ??
-                            "";
+                        "QC Lab",
+                        Icons.biotech,
+                        onTap: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          final token =
+                              prefs.getString("jwt_token") ??
+                              prefs.getString("token") ??
+                              "";
 
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => LbTiketManagerCPOPage(
-                              userId: "manager",
-                              token: token,
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LbTiketManagerCPOPage(
+                                userId: "manager",
+                                token: token,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
 
                       const SizedBox(height: 10),
                       _optionItem(
-                      "Unloading",
-                      Icons.local_shipping,
-                      onTap: () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        final token =
-                            prefs.getString("jwt_token") ??
-                            prefs.getString("token") ??
-                            "";
+                        "Unloading",
+                        Icons.local_shipping,
+                        onTap: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          final token =
+                              prefs.getString("jwt_token") ??
+                              prefs.getString("token") ??
+                              "";
 
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => UnTiketManagerCPOPage(
-                              userId: "manager",
-                              token: token,
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => UnTiketManagerCPOPage(
+                                userId: "manager",
+                                token: token,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-
+                          );
+                        },
+                      ),
                     ],
                   )
                 : const SizedBox(),
@@ -650,32 +725,28 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
   }
 
   Widget _optionItem(String title, IconData icon, {VoidCallback? onTap}) {
-  return GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.blue),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.blue),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   // ------------------ DOT ------------------
   Widget _dot(int i) {
@@ -740,7 +811,7 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                     child: CircularProgressIndicator(
                       value: loadingProgress.expectedTotalBytes != null
                           ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
+                                loadingProgress.expectedTotalBytes!
                           : null,
                     ),
                   );
@@ -752,10 +823,7 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [
-                          Colors.blue.shade400,
-                          Colors.blue.shade600,
-                        ],
+                        colors: [Colors.blue.shade400, Colors.blue.shade600],
                       ),
                     ),
                   );
@@ -768,16 +836,14 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
               top: 0,
               left: 0,
               right: 0,
-              bottom: 80, // Leave space for statistics container (approximately 80px)
+              bottom:
+                  80, // Leave space for statistics container (approximately 80px)
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.6),
-                    ],
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.6)],
                   ),
                 ),
               ),
@@ -787,8 +853,10 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
               top: 16,
               left: 16,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(12),

@@ -1,13 +1,14 @@
-import 'package:flutter/material.dart';
-import '../../../login.dart';
 import 'dart:async';
-import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
-import 'data_truk_pome.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../login.dart';
 import '../CPO/home_manager.dart';
 import '../PK/home_manager_pk.dart';
+import 'data_truk_pome.dart';
 
 class HomeManagerPome extends StatefulWidget {
   const HomeManagerPome({super.key});
@@ -79,7 +80,8 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
 
       if (token == null) return;
 
-      token = "Bearer $token";
+      // Normalize token: strip Bearer prefix if present, then add it
+      token = token.startsWith("Bearer ") ? token : "Bearer $token";
 
       final now = DateTime.now();
       String from = "${now.year}-01-01";
@@ -131,7 +133,7 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
       "September",
       "Oktober",
       "November",
-      "Desember"
+      "Desember",
     ];
     return "${now.day} ${bulan[now.month - 1]} ${now.year}";
   }
@@ -168,27 +170,35 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
         ),
         title: Row(
           children: [
-            const Text("Home VCF",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600)),
+            const Text(
+              "Home VCF",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(width: 6),
             PopupMenuButton<String>(
               color: Colors.blue.shade50,
               elevation: 4,
               offset: const Offset(0, 34),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
               onSelected: (value) {
                 if (value == halamanAktif) return;
 
                 if (value == "CPO") {
-                  Navigator.pushReplacement(context,
-                      MaterialPageRoute(builder: (_) => const ManagerHomeSwipe()));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ManagerHomeSwipe()),
+                  );
                 } else if (value == "PK") {
-                  Navigator.pushReplacement(context,
-                      MaterialPageRoute(builder: (_) => const HomeManagerPk()));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HomeManagerPk()),
+                  );
                 }
               },
               itemBuilder: (context) => [
@@ -208,9 +218,12 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
                   child: Text("PK"),
                 ),
               ],
-              child: const Icon(Icons.arrow_drop_down,
-                  color: Colors.white, size: 34),
-            )
+              child: const Icon(
+                Icons.arrow_drop_down,
+                color: Colors.white,
+                size: 34,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -223,22 +236,27 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
 
       // ====================== DRAWER ======================
       drawer: Drawer(
-        child: ListView(children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(color: Colors.blue),
-            child: Text("Menu VCF",
-                style: TextStyle(color: Colors.white, fontSize: 18)),
-          ),
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text("Logout"),
-            onTap: () {
-              Navigator.of(context).pushAndRemoveUntil(
+        child: ListView(
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text(
+                "Menu VCF",
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text("Logout"),
+              onTap: () {
+                Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const LoginPage()),
-                  (route) => false);
-            },
-          ),
-        ]),
+                  (route) => false,
+                );
+              },
+            ),
+          ],
+        ),
       ),
 
       // ====================== BODY ======================
@@ -248,8 +266,10 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Hai, Manager 👋",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              const Text(
+                "Hai, Manager 👋",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 4),
               Text(
                 "Selamat datang di VEHICLE CONTROL SYSTEM",
@@ -258,20 +278,26 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
               const SizedBox(height: 28),
 
               Center(
-                child: Column(children: [
-                  const Text("QC Sample POME",
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
-                  Container(
-                    height: 3,
-                    width: 300,
-                    decoration: BoxDecoration(
-                      color: Colors.blue,
-                      borderRadius: BorderRadius.circular(30),
+                child: Column(
+                  children: [
+                    const Text(
+                      "QC Sample POME",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  )
-                ]),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 3,
+                      width: 300,
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ],
+                ),
               ),
 
               const SizedBox(height: 30),
@@ -290,18 +316,40 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
                         final page = index % 3;
 
                         if (page == 0) {
-                          return _imageCard("QC SAMPLE POME", "assets/pome.jpg", imageHeight);
+                          return _imageCard(
+                            "QC SAMPLE POME",
+                            "assets/pome.jpg",
+                            imageHeight,
+                          );
                         } else if (page == 1) {
-                          return _imageCard("QC SAMPLE CPO", "assets/cpo.jpg", imageHeight);
+                          return _imageCard(
+                            "QC SAMPLE CPO",
+                            "assets/cpo.jpg",
+                            imageHeight,
+                          );
                         } else {
-                          return _imageCard("QC SAMPLE PK", "assets/pk.jpg", imageHeight);
+                          return _imageCard(
+                            "QC SAMPLE PK",
+                            "assets/pk.jpg",
+                            imageHeight,
+                          );
                         }
                       },
                     ),
-                    Positioned(left: 0,
-                        child: _circleNavBtn(Icons.chevron_left_rounded, prevPage)),
-                    Positioned(right: 0,
-                        child: _circleNavBtn(Icons.chevron_right_rounded, nextPage)),
+                    Positioned(
+                      left: 0,
+                      child: _circleNavBtn(
+                        Icons.chevron_left_rounded,
+                        prevPage,
+                      ),
+                    ),
+                    Positioned(
+                      right: 0,
+                      child: _circleNavBtn(
+                        Icons.chevron_right_rounded,
+                        nextPage,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -324,16 +372,24 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
                         controller: infoController,
                         physics: const NeverScrollableScrollPhysics(),
                         children: [
-                          _infoCard("Total Sample Truk Keluar", "$sampleKeluar"),
+                          _infoCard(
+                            "Total Sample Truk Keluar",
+                            "$sampleKeluar",
+                          ),
                           _infoCard("Total LAB Truk Keluar", "$labKeluar"),
-                          _infoCard("Total Unloading Truk Keluar", "$unloadKeluar"),
+                          _infoCard(
+                            "Total Unloading Truk Keluar",
+                            "$unloadKeluar",
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child:
-                          _infoCard("Tanggal Hari Ini", getTanggalIndonesia()),
+                      child: _infoCard(
+                        "Tanggal Hari Ini",
+                        getTanggalIndonesia(),
+                      ),
                     ),
                   ],
                 ),
@@ -360,9 +416,10 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
@@ -371,9 +428,10 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
         children: [
           Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
           const SizedBox(height: 4),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.bold))
+          Text(
+            value,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );
@@ -388,9 +446,10 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 3))
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
@@ -398,38 +457,52 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
           Row(
             children: [
               Expanded(
-                  child: GestureDetector(
-                onTap: () =>
-                    setState(() => showInputOptions = !showInputOptions),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
+                child: GestureDetector(
+                  onTap: () =>
+                      setState(() => showInputOptions = !showInputOptions),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300)),
-                  alignment: Alignment.center,
-                  child: const Text("Input Data POME",
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      "Input Data POME",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
-              )),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const DataTrukPomePage()));
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const DataTrukPomePage(),
+                      ),
+                    );
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(12)),
+                      color: Colors.blue,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     alignment: Alignment.center,
-                    child: const Text("Cek Total Truk",
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white)),
+                    child: const Text(
+                      "Cek Total Truk",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -439,15 +512,17 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
           AnimatedSize(
             duration: const Duration(milliseconds: 260),
             child: showInputOptions
-                ? Column(children: [
-                    _optionItem("Sample", Icons.science),
-                    const SizedBox(height: 10),
-                    _optionItem("QC Lab", Icons.biotech),
-                    const SizedBox(height: 10),
-                    _optionItem("Unloading", Icons.local_shipping)
-                  ])
+                ? Column(
+                    children: [
+                      _optionItem("Sample", Icons.science),
+                      const SizedBox(height: 10),
+                      _optionItem("QC Lab", Icons.biotech),
+                      const SizedBox(height: 10),
+                      _optionItem("Unloading", Icons.local_shipping),
+                    ],
+                  )
                 : const SizedBox(),
-          )
+          ),
         ],
       ),
     );
@@ -457,16 +532,18 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300)),
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
       child: Row(
         children: [
           Icon(icon, color: Colors.blue),
           const SizedBox(width: 12),
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
@@ -490,16 +567,20 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
   Widget _circleNavBtn(IconData icon, VoidCallback onTap) {
     return Container(
       decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 10,
-                offset: const Offset(2, 4))
-          ]),
+        shape: BoxShape.circle,
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(2, 4),
+          ),
+        ],
+      ),
       child: IconButton(
-          icon: Icon(icon, color: Colors.blue, size: 32), onPressed: onTap),
+        icon: Icon(icon, color: Colors.blue, size: 32),
+        onPressed: onTap,
+      ),
     );
   }
 
@@ -509,28 +590,37 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: Stack(children: [
-          Container(
-            height: height,
-            width: double.infinity,
-            color: Colors.grey.shade200,
-            child: Image.asset(path, fit: BoxFit.cover),
-          ),
-          Positioned(
-            top: 16,
-            left: 16,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.75),
-                  borderRadius: BorderRadius.circular(12)),
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600)),
+        child: Stack(
+          children: [
+            Container(
+              height: height,
+              width: double.infinity,
+              color: Colors.grey.shade200,
+              child: Image.asset(path, fit: BoxFit.cover),
             ),
-          )
-        ]),
+            Positioned(
+              top: 16,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.75),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
