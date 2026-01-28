@@ -70,6 +70,10 @@ class _LoginPageState extends State<LoginPage> {
 
     var url = Uri.parse('${AppConfig.apiBaseUrl}login');
 
+    // Log request details
+    print('🔵 [LOGIN] Request URL: $url');
+    print('🔵 [LOGIN] API Base URL: ${AppConfig.apiBaseUrl}');
+
     try {
       var response = await http.post(
         url,
@@ -79,8 +83,64 @@ class _LoginPageState extends State<LoginPage> {
 
       setState(() => isLoading = false);
 
+      // Log response details
+      print('🟢 [LOGIN] Response Status: ${response.statusCode}');
+      print('🟢 [LOGIN] Response Headers: ${response.headers}');
+      print('🟢 [LOGIN] Response Body Length: ${response.body.length}');
+      print(
+        '🟢 [LOGIN] Response Body (first 200 chars): ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+      );
+      print('🟢 [LOGIN] Content-Type: ${response.headers['content-type']}');
+
       if (response.statusCode == 200) {
-        var data = json.decode(response.body);
+        // Validate content-type before parsing
+        final contentType = response.headers['content-type'] ?? '';
+        if (!contentType.contains('application/json')) {
+          print(
+            '❌ [LOGIN] ERROR: Response is not JSON! Content-Type: $contentType',
+          );
+          print('❌ [LOGIN] Full Response Body: ${response.body}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Server returned non-JSON response. Check logs for details.',
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          return;
+        }
+
+        // Validate response body is not empty
+        if (response.body.isEmpty || response.body.trim().isEmpty) {
+          print('❌ [LOGIN] ERROR: Response body is empty!');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Server returned empty response'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+          return;
+        }
+
+        var data;
+        try {
+          data = json.decode(response.body);
+          print('✅ [LOGIN] JSON parsed successfully');
+        } catch (e) {
+          print('❌ [LOGIN] JSON Parse Error: $e');
+          print('❌ [LOGIN] Response Body: ${response.body}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Invalid JSON response from server. Check logs.'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          return;
+        }
 
         if (data['success'] == true && data['data'] != null) {
           // Get raw token (without Bearer prefix)
@@ -114,18 +174,42 @@ class _LoginPageState extends State<LoginPage> {
           );
         }
       } else {
+        // Log error response
+        print('🔴 [LOGIN] Error Status: ${response.statusCode}');
+        print('🔴 [LOGIN] Error Headers: ${response.headers}');
+        print('🔴 [LOGIN] Error Body: ${response.body}');
+
         // Try to extract error message from response body (matching other screens pattern)
         String errorMessage = "User ID atau Password salah!";
         try {
-          var errorData = json.decode(response.body);
-          errorMessage =
-              errorData['message'] ?? errorData['error'] ?? errorMessage;
+          // Check if response is JSON
+          final contentType = response.headers['content-type'] ?? '';
+          if (contentType.contains('application/json') &&
+              response.body.isNotEmpty) {
+            var errorData = json.decode(response.body);
+            errorMessage =
+                errorData['message'] ?? errorData['error'] ?? errorMessage;
+            print('🔴 [LOGIN] Parsed error message: $errorMessage');
+          } else {
+            print(
+              '🔴 [LOGIN] Non-JSON error response. Content-Type: $contentType',
+            );
+            // If response is HTML or plain text, show generic message
+            if (response.statusCode == 404) {
+              errorMessage = "Endpoint tidak ditemukan. Periksa URL API.";
+            } else if (response.statusCode == 500) {
+              errorMessage = "Server error. Periksa log backend.";
+            }
+          }
         } catch (e) {
+          print('🔴 [LOGIN] Error parsing error response: $e');
           // If parsing fails, use status code based message
           if (response.statusCode == 401) {
             errorMessage = "User ID atau Password salah!";
           } else if (response.statusCode == 422) {
             errorMessage = "Data tidak valid";
+          } else if (response.statusCode == 404) {
+            errorMessage = "Endpoint tidak ditemukan. Periksa konfigurasi API.";
           } else if (response.statusCode >= 500) {
             errorMessage = "Server error. Silakan coba lagi nanti.";
           } else {
@@ -140,17 +224,27 @@ class _LoginPageState extends State<LoginPage> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       setState(() => isLoading = false);
+      print('❌ [LOGIN] Exception caught: $e');
+      print('❌ [LOGIN] Stack trace: $stackTrace');
+
       String errorMessage = "Gagal koneksi ke server";
       if (e.toString().contains('SocketException') ||
           e.toString().contains('Failed host lookup')) {
         errorMessage =
             "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
+        print('❌ [LOGIN] Network error: Cannot reach server');
       } else if (e.toString().contains('TimeoutException')) {
         errorMessage = "Waktu koneksi habis. Silakan coba lagi.";
+        print('❌ [LOGIN] Timeout error');
+      } else if (e.toString().contains('FormatException') ||
+          e.toString().contains('unexpected character')) {
+        errorMessage = "Format response tidak valid. Periksa log untuk detail.";
+        print('❌ [LOGIN] Format error - likely non-JSON response');
       } else {
         errorMessage = "Error: ${e.toString()}";
+        print('❌ [LOGIN] Unknown error: $e');
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

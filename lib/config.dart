@@ -26,11 +26,6 @@ class AppConfig {
               : 'http://localhost:8000/api/')
         : productionUrl;
 
-    // Log configuration on first access (helps with debugging)
-    print('🔧 [CONFIG] API Base URL: $url');
-    print('🔧 [CONFIG] Use Local Dev: $useLocalDev');
-    print('🔧 [CONFIG] Platform: ${Platform.operatingSystem}');
-
     return url;
   }
 
