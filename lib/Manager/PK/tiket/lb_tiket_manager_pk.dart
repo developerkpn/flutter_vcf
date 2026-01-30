@@ -83,7 +83,7 @@ class _LbTiketManagerPKPageState extends State<LbTiketManagerPKPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Manager Lab PK"),
-        backgroundColor: Colors.brown,
+        backgroundColor: Colors.blue,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: fetchTickets),
         ],

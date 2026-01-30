@@ -431,7 +431,7 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                         if (page == 0) {
                           return _stageCard(
                             "QC Sampling CPO",
-                            getImageUrl("vcs/carousel/cpo_sampling.jpg"),
+                            "assets/cpo.jpg",
                             imageHeight,
                             totalSampleKeluar,
                             samplingPendingChecks,
@@ -440,7 +440,7 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                         } else if (page == 1) {
                           return _stageCard(
                             "QC Lab CPO",
-                            getImageUrl("vcs/carousel/cpo_lab.jpg"),
+                            "assets/cpo.jpg",
                             imageHeight,
                             totalLabKeluar,
                             labPendingChecks,
@@ -449,7 +449,7 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                         }
                         return _stageCard(
                           "Unloading CPO",
-                          getImageUrl("vcs/carousel/cpo_unloading.jpg"),
+                          "assets/cpo.jpg",
                           imageHeight,
                           totalUnloadingKeluar,
                           unloadingPendingChecks,
@@ -802,33 +802,7 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
               height: height,
               width: double.infinity,
               color: Colors.grey.shade200,
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                          : null,
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  // Fallback to a gradient background if image fails to load
-                  return Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Colors.blue.shade400, Colors.blue.shade600],
-                      ),
-                    ),
-                  );
-                },
-              ),
+              child: Image.asset(imageUrl, fit: BoxFit.cover),
             ),
             // Gradient overlay for better text readability (only on image, not on statistics)
             // Positioned to stop before the statistics container area

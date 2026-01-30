@@ -70,7 +70,7 @@ class _LbTiketManagerPOMEPageState extends State<LbTiketManagerPOMEPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Manager Lab POME"),
-        backgroundColor: Colors.teal,
+        backgroundColor: Colors.blue,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: fetchTickets),
         ],
@@ -407,7 +407,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Manager Lab Check"),
-        backgroundColor: Colors.teal,
+        backgroundColor: Colors.blue,
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())

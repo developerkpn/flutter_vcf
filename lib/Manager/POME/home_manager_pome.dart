@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_vcf/Manager/POME/tiket/lb_tiket_manager_pome.dart';
+import 'package:flutter_vcf/Manager/POME/tiket/sp_tiket_manager_pome.dart';
+import 'package:flutter_vcf/Manager/POME/tiket/un_tiket_manager_pome.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,13 +29,20 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
   Timer? autoSlideTimer;
   Timer? autoInfoTimer;
   bool showInputOptions = false;
-
   final String halamanAktif = "POME";
 
-  // INFO CARD TOTAL KELUAR
-  int sampleKeluar = 0;
-  int labKeluar = 0;
-  int unloadKeluar = 0;
+  int totalSampleKeluar = 0;
+  int totalLabKeluar = 0;
+  int totalUnloadingKeluar = 0;
+
+  // Manager check statistics for carousel
+  int samplingPendingChecks = 0;
+  int labPendingChecks = 0;
+  int unloadingPendingChecks = 0;
+
+  int samplingApprovedChecks = 0;
+  int labApprovedChecks = 0;
+  int unloadingApprovedChecks = 0;
 
   final api = ApiService(AppConfig.createDio());
 
@@ -76,42 +86,100 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
   Future<void> loadStatistics() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      String? token = prefs.getString("jwt_token");
+      String? savedToken =
+          prefs.getString("jwt_token") ?? prefs.getString("token");
 
-      if (token == null) return;
+      if (savedToken == null) {
+        return;
+      }
 
       // Normalize token: strip Bearer prefix if present, then add it
-      token = token.startsWith("Bearer ") ? token : "Bearer $token";
+      String token = savedToken.startsWith("Bearer ")
+          ? savedToken
+          : "Bearer $savedToken";
 
       final now = DateTime.now();
-      String from = "${now.year}-01-01";
-      String to = "${now.year}-12-31";
+      String dateFrom = "${now.year}-01-01";
+      String dateTo = "${now.year}-12-31";
 
-      // QC Sampling POME
-      final sample = await api.getQcSamplingPomeStats(
+      // Load operator statistics
+      final sampleStats = await api.getQcSamplingPomeStats(
         token,
-        dateFrom: from,
-        dateTo: to,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
       );
 
-      // QC Lab POME
-      final lab = await api.getQcLabPomeStatistics(
+      final labStats = await api.getQcLabPomeStatistics(
         token,
-        dateFrom: from,
-        dateTo: to,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
       );
 
-      // Unloading POME
-      final unload = await api.getUnloadingPomeStatistics(
+      final unloadingStats = await api.getUnloadingPomeStatistics(
         token,
-        dateFrom: from,
-        dateTo: to,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
+      );
+
+      // Load manager check statistics
+      final managerStats = await api.getManagerCheckStatistics(token);
+
+      // Fetch tickets for each stage to count pending checks
+      final samplingTickets = await api.getManagerCheckTickets(
+        token,
+        "POME",
+        stage: "sampling",
+      );
+
+      final labTickets = await api.getManagerCheckTickets(
+        token,
+        "POME",
+        stage: "lab",
+      );
+
+      final unloadingTickets = await api.getManagerCheckTickets(
+        token,
+        "POME",
+        stage: "unloading",
       );
 
       setState(() {
-        sampleKeluar = sample.data?.statistics?.totalTrukKeluar ?? 0;
-        labKeluar = lab.data?.statistics?.totalTrukKeluar ?? 0;
-        unloadKeluar = unload.data?.statistics?.total_truk_keluar ?? 0;
+        totalSampleKeluar =
+            sampleStats.data?.statistics?.totalTrukKeluar ?? 0;
+
+        totalLabKeluar = labStats.data?.statistics?.totalTrukKeluar ?? 0;
+
+        totalUnloadingKeluar =
+            unloadingStats.data?.statistics?.total_truk_keluar ?? 0;
+
+        // Extract manager check statistics by stage
+        final byStage = managerStats.data?.by_stage;
+        if (byStage != null) {
+          final sampling = byStage['sampling'];
+          final lab = byStage['lab'];
+          final unloading = byStage['unloading'];
+
+          samplingApprovedChecks = sampling?.approved ?? 0;
+          labApprovedChecks = lab?.approved ?? 0;
+          unloadingApprovedChecks = unloading?.approved ?? 0;
+        }
+
+        // Count pending checks (tickets without manager check)
+        samplingPendingChecks =
+            samplingTickets.data
+                ?.where((t) => !(t.has_manager_check ?? false))
+                .length ??
+            0;
+        labPendingChecks =
+            labTickets.data
+                ?.where((t) => !(t.has_manager_check ?? false))
+                .length ??
+            0;
+        unloadingPendingChecks =
+            unloadingTickets.data
+                ?.where((t) => !(t.has_manager_check ?? false))
+                .length ??
+            0;
       });
     } catch (e) {
       print("Gagal load statistik POME: $e");
@@ -302,7 +370,7 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
 
               const SizedBox(height: 30),
 
-              // ====================== CAROUSEL ======================
+              // ====================== CAROUSEL GAMBAR ======================
               SizedBox(
                 height: imageHeight + 50,
                 child: Stack(
@@ -310,30 +378,37 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
                   children: [
                     PageView.builder(
                       controller: _controller,
-                      onPageChanged: (i) =>
-                          setState(() => currentIndex = i % 3),
+                      onPageChanged: (index) =>
+                          setState(() => currentIndex = index % 3),
                       itemBuilder: (context, index) {
                         final page = index % 3;
-
                         if (page == 0) {
-                          return _imageCard(
-                            "QC SAMPLE POME",
+                          return _stageCard(
+                            "QC Sampling POME",
                             "assets/pome.jpg",
                             imageHeight,
+                            totalSampleKeluar,
+                            samplingPendingChecks,
+                            samplingApprovedChecks,
                           );
                         } else if (page == 1) {
-                          return _imageCard(
-                            "QC SAMPLE CPO",
-                            "assets/cpo.jpg",
+                          return _stageCard(
+                            "QC Lab POME",
+                            "assets/pome.jpg",
                             imageHeight,
-                          );
-                        } else {
-                          return _imageCard(
-                            "QC SAMPLE PK",
-                            "assets/pk.jpg",
-                            imageHeight,
+                            totalLabKeluar,
+                            labPendingChecks,
+                            labApprovedChecks,
                           );
                         }
+                        return _stageCard(
+                          "Unloading POME",
+                          "assets/pome.jpg",
+                          imageHeight,
+                          totalUnloadingKeluar,
+                          unloadingPendingChecks,
+                          unloadingApprovedChecks,
+                        );
                       },
                     ),
                     Positioned(
@@ -371,15 +446,16 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
                       child: PageView(
                         controller: infoController,
                         physics: const NeverScrollableScrollPhysics(),
+                        onPageChanged: (i) => setState(() => infoIndex = i),
                         children: [
                           _infoCard(
                             "Total Sample Truk Keluar",
-                            "$sampleKeluar",
+                            "$totalSampleKeluar",
                           ),
-                          _infoCard("Total LAB Truk Keluar", "$labKeluar"),
+                          _infoCard("Total LAB Truk Keluar", "$totalLabKeluar"),
                           _infoCard(
                             "Total Unloading Truk Keluar",
-                            "$unloadKeluar",
+                            "$totalUnloadingKeluar",
                           ),
                         ],
                       ),
@@ -411,6 +487,7 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
   Widget _infoCard(String title, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      constraints: const BoxConstraints(minHeight: 65),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -426,11 +503,22 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.grey,
+              height: 1.2,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              height: 1.2,
+            ),
           ),
         ],
       ),
@@ -463,8 +551,9 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white,
                       border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
                     child: const Text(
@@ -511,14 +600,77 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
           const SizedBox(height: 16),
           AnimatedSize(
             duration: const Duration(milliseconds: 260),
+            curve: Curves.easeInOut,
             child: showInputOptions
                 ? Column(
                     children: [
-                      _optionItem("Sample", Icons.science),
+                      _optionItem(
+                        "Sample",
+                        Icons.science,
+                        onTap: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          final token =
+                              prefs.getString("jwt_token") ??
+                              prefs.getString("token") ??
+                              "";
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SpTiketManagerPOMEPage(
+                                userId: "manager",
+                                token: token,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
                       const SizedBox(height: 10),
-                      _optionItem("QC Lab", Icons.biotech),
+                      _optionItem(
+                        "QC Lab",
+                        Icons.biotech,
+                        onTap: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          final token =
+                              prefs.getString("jwt_token") ??
+                              prefs.getString("token") ??
+                              "";
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LbTiketManagerPOMEPage(
+                                userId: "manager",
+                                token: token,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
                       const SizedBox(height: 10),
-                      _optionItem("Unloading", Icons.local_shipping),
+                      _optionItem(
+                        "Unloading",
+                        Icons.local_shipping,
+                        onTap: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          final token =
+                              prefs.getString("jwt_token") ??
+                              prefs.getString("token") ??
+                              "";
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => UnTiketManagerPOMEPage(
+                                userId: "manager",
+                                token: token,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   )
                 : const SizedBox(),
@@ -528,8 +680,10 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
     );
   }
 
-  Widget _optionItem(String title, IconData icon) {
-    return Container(
+  Widget _optionItem(String title, IconData icon, {VoidCallback? onTap}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
@@ -542,12 +696,17 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
           const SizedBox(width: 12),
           Text(
             title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   // NAVIGATION DOT
   Widget _dot(int i) {
@@ -584,8 +743,15 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
     );
   }
 
-  // IMAGE CARD
-  Widget _imageCard(String label, String path, double height) {
+  // ====================== STAGE CARD (with statistics) ======================
+  Widget _stageCard(
+    String label,
+    String imageUrl,
+    double height,
+    int totalKeluar,
+    int pendingChecks,
+    int approvedChecks,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: ClipRRect(
@@ -596,8 +762,27 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
               height: height,
               width: double.infinity,
               color: Colors.grey.shade200,
-              child: Image.asset(path, fit: BoxFit.cover),
+              child: Image.asset(imageUrl, fit: BoxFit.cover),
             ),
+            // Gradient overlay for better text readability (only on image, not on statistics)
+            // Positioned to stop before the statistics container area
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom:
+                  80, // Leave space for statistics container (approximately 80px)
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.6)],
+                  ),
+                ),
+              ),
+            ),
+            // Stage label at top
             Positioned(
               top: 16,
               left: 16,
@@ -607,21 +792,76 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
                   horizontal: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.75),
+                  color: Colors.white.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   label,
                   style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.blue,
                   ),
+                ),
+              ),
+            ),
+            // Statistics at bottom (fully opaque white, drawn last to ensure it's on top)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _statItem("Total Keluar", "$totalKeluar", Colors.blue),
+                        _statItem("Pending", "$pendingChecks", Colors.orange),
+                        _statItem("Approved", "$approvedChecks", Colors.green),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _statItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

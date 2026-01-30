@@ -78,7 +78,7 @@ class _SpTiketManagerPOMEPageState extends State<SpTiketManagerPOMEPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Manager Sampling POME"),
-        backgroundColor: Colors.teal,
+        backgroundColor: Colors.blue,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: fetchTickets),
         ],
@@ -450,7 +450,7 @@ class _ManagerSamplingCheckInputPageState
     return Scaffold(
       appBar: AppBar(
         title: const Text("Manager Sampling Check"),
-        backgroundColor: Colors.teal,
+        backgroundColor: Colors.blue,
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())

@@ -33,6 +33,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   bool _isSubmitting = false;
   String pageMode = 'normal';
   bool _isCameraEnabled = false;
+  bool _isReloadingExisting = false;
 
   File? _image1, _image2, _image3, _image4;
   final ImagePicker picker = ImagePicker();
@@ -323,6 +324,19 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     );
   }
 
+  Future<void> _reloadExistingPhotos() async {
+    if (_isReloadingExisting) return;
+    setState(() => _isReloadingExisting = true);
+    try {
+      await _loadExistingUnloading();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gambar berhasil dimuat ulang')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memuat ulang gambar: $e')));
+    } finally {
+      if (mounted) setState(() => _isReloadingExisting = false);
+    }
+  }
+
   Future<void> _confirmAndSubmit(String status) async {
     if (status == "hold" && disableHoldButton) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -540,12 +554,28 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
             const SizedBox(height: 12),
 
             if (unloadingStarted) ...[
-              Text(
-                "UNLOADING SEBELUMNYA",
-                style: TextStyle(
-                  fontSize: baseFont + 1,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "UNLOADING SEBELUMNYA",
+                    style: TextStyle(
+                      fontSize: baseFont + 1,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  _isReloadingExisting
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : IconButton(
+                          tooltip: 'Reload existing photos',
+                          icon: const Icon(Icons.refresh, size: 20),
+                          onPressed: () async => await _reloadExistingPhotos(),
+                        ),
+                ],
               ),
               const SizedBox(height: 8),
               _fieldReadOnly("Pilih Tank", _tankLabel(initialTankId)),
@@ -568,10 +598,14 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
                           showDialog(
                             context: context,
                             builder: (_) => Dialog(
-                              child: InteractiveViewer(
-                                child: Image.network(url, fit: BoxFit.contain),
+                                child: InteractiveViewer(
+                                  child: Image.network(
+                                    url,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
+                                  ),
+                                ),
                               ),
-                            ),
                           );
                         },
                         child: _initialPhotoThumb(url),

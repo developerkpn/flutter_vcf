@@ -70,7 +70,7 @@ class _UnTiketManagerPOMEPageState extends State<UnTiketManagerPOMEPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Manager Unloading POME"),
-        backgroundColor: Colors.teal,
+        backgroundColor: Colors.blue,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: fetchTickets),
         ],
@@ -373,7 +373,7 @@ class _ManagerUnloadingCheckInputPageState
     return Scaffold(
       appBar: AppBar(
         title: const Text("Manager Unloading Check"),
-        backgroundColor: Colors.teal,
+        backgroundColor: Colors.blue,
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
