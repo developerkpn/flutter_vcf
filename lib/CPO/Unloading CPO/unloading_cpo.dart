@@ -38,6 +38,7 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
   String normalizedStatus(String? s) {
     final v = (s ?? "").toLowerCase().trim();
     if (v == "hold" || v == "unloading_hold") return "unloading_hold";
+    if (v == "random_check") return "random_check";
     if (v == "approved" || v == "wb_out") return "wb_out";
     return v;
   }
@@ -51,6 +52,8 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
         return "HOLD";
       case "wb_out":
         return "APPROVED";
+      case "random_check":
+        return "Pending Manager Approval";
       case "rejected":
         return "REJECTED";
       default:
@@ -64,6 +67,8 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
         return Colors.orange;
       case "wb_out":
         return Colors.green;
+      case "random_check":
+        return Colors.yellow.shade700;
       case "rejected":
         return Colors.red;
       default:
@@ -77,6 +82,8 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
         return Icons.pause_circle_outline;
       case "wb_out":
         return Icons.check_circle_outline;
+      case "random_check":
+        return Icons.error_outline;
       case "rejected":
         return Icons.cancel_outlined;
       default:
@@ -146,7 +153,9 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
                   : e.regist_status,
             );
 
-            return normalized == "unloading_hold" || normalized == "wb_out";
+            return normalized == "unloading_hold" ||
+                normalized == "wb_out" ||
+                normalized == "random_check";
           }).toList();
 
           if (unloadingTrucks.isEmpty) {

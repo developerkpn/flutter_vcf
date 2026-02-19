@@ -12,11 +12,7 @@ class QCLabCPOPage extends StatefulWidget {
   final String userId;
   final String token;
 
-  const QCLabCPOPage({
-    super.key,
-    required this.userId,
-    required this.token,
-  });
+  const QCLabCPOPage({super.key, required this.userId, required this.token});
 
   @override
   State<QCLabCPOPage> createState() => _QCLabCPOPageState();
@@ -40,38 +36,44 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
     return prefs.getString('jwt_token') ?? widget.token;
   }
 
- Future<void> fetchTickets() async {
-  setState(() => isLoading = true);
+  Future<void> fetchTickets() async {
+    setState(() => isLoading = true);
 
-  try {
-    final token = await getToken();
-    final res = await api.getQcLabCpoVehicles("Bearer $token");
+    try {
+      final token = await getToken();
+      final res = await api.getQcLabCpoVehicles("Bearer $token");
 
-    final vehicles = (res.data ?? []).where((v) {
-      final regist = (v.regist_status ?? "").toLowerCase();
-      final labStatus = (v.lab_status ?? "").toLowerCase();
+      final vehicles = (res.data ?? []).where((v) {
+        final regist = (v.regist_status ?? "").toLowerCase();
+        final labStatus = (v.lab_status ?? "").toLowerCase();
 
-      // tampilkan jika hasil lab sudah ada
-      final isLabProcessed = ["hold", "approved", "rejected"].contains(labStatus);
+        // tampilkan jika hasil lab sudah ada
+        final isLabProcessed = [
+          "hold",
+          "approved",
+          "rejected",
+        ].contains(labStatus);
 
-      // regist_status bisa 'qc_lab', 'qc_lab_hold', atau 'unloading'
-      final isValidRegist = regist.startsWith("qc_lab") || regist == "unloading";
+        // regist_status bisa 'qc_lab', 'qc_lab_hold', atau 'unloading'
+        final isValidRegist =
+            regist.startsWith("qc_lab") ||
+            regist == "unloading" ||
+            regist == "random_check";
 
-      return isValidRegist && isLabProcessed;
-    }).toList();
+        return (isValidRegist && isLabProcessed) || regist == "random_check";
+      }).toList();
 
-    setState(() {
-      tickets = vehicles;
-      isLoading = false;
-    });
-  } catch (e) {
-    setState(() => isLoading = false);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("Error: $e")));
+      setState(() {
+        tickets = vehicles;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
   }
-}
-
-
 
   Color _statusColor(String s) {
     switch (s) {
@@ -99,6 +101,10 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
     }
   }
 
+  bool _isPendingManagerApproval(QcLabCpoVehicle v) {
+    return (v.regist_status ?? '').toLowerCase().trim() == 'random_check';
+  }
+
   Future<void> _openAddPage() async {
     final result = await Navigator.push(
       context,
@@ -116,10 +122,7 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => InputLabCPOPage(
-          token: widget.token,
-          model: v,
-        ),
+        builder: (_) => InputLabCPOPage(token: widget.token, model: v),
       ),
     );
 
@@ -133,66 +136,75 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
         title: const Text("Dashboard QC Lab CPO"),
         backgroundColor: Colors.blue,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: fetchTickets,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: fetchTickets),
         ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : tickets.isEmpty
-              ? const Center(
-                  child: Text(
-                    "Belum ada tiket QC Lab CPO",
-                    style: TextStyle(color: Colors.black54, fontSize: 16),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: tickets.length,
-                  itemBuilder: (_, i) {
-                    final t = tickets[i];
-                    final status =
-                        (t.lab_status ?? "").toLowerCase();
+          ? const Center(
+              child: Text(
+                "Belum ada tiket QC Lab CPO",
+                style: TextStyle(color: Colors.black54, fontSize: 16),
+              ),
+            )
+          : ListView.builder(
+              itemCount: tickets.length,
+              itemBuilder: (_, i) {
+                final t = tickets[i];
+                final status = (t.lab_status ?? "").toLowerCase();
+                final isPendingManagerApproval = _isPendingManagerApproval(t);
+                final statusColor = isPendingManagerApproval
+                    ? Colors.yellow.shade700
+                    : _statusColor(status);
+                final statusIcon = isPendingManagerApproval
+                    ? Icons.error_outline
+                    : _statusIcon(status);
+                final statusLabel = isPendingManagerApproval
+                    ? 'Pending Manager Approval'
+                    : status.toUpperCase();
 
-                    return GestureDetector(
-                      onTap: () {
-                        if (status == "hold") _openEditPage(t);
-                      },
-                      child: Card(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: ListTile(
-                          title: Text("Tiket: ${t.wb_ticket_no ?? '-'}"),
-                          subtitle: Text("Plat: ${t.plate_number ?? '-'}"),
-                          trailing: Chip(
-                            backgroundColor:
-                                _statusColor(status).withOpacity(0.15),
-                            side: BorderSide(color: _statusColor(status)),
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(_statusIcon(status),
-                                    color: _statusColor(status), size: 16),
-                                const SizedBox(width: 4),
-                                Text(
-                                  status.toUpperCase(),
-                                  style: TextStyle(
-                                      color: _statusColor(status),
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              ],
+                return GestureDetector(
+                  onTap: () {
+                    if (!isPendingManagerApproval && status == "hold") {
+                      _openEditPage(t);
+                    }
+                  },
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ListTile(
+                      title: Text("Tiket: ${t.wb_ticket_no ?? '-'}"),
+                      subtitle: Text("Plat: ${t.plate_number ?? '-'}"),
+                      trailing: Chip(
+                        backgroundColor: statusColor.withOpacity(0.15),
+                        side: BorderSide(color: statusColor),
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(statusIcon, color: statusColor, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              statusLabel,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.blue,
         child: const Icon(Icons.add, color: Colors.white),

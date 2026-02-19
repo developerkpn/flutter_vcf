@@ -45,9 +45,10 @@ class _SampleQCPOMEPageState extends State<SampleQCPOMEPage> {
       if (raw != null && raw.isNotEmpty) {
         final List<dynamic> data = jsonDecode(raw);
         setState(() {
-          tickets = data.whereType<Map>()
-                        .map((e) => Map<String, dynamic>.from(e))
-                        .toList();
+          tickets = data
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
         });
       }
     } catch (_) {}
@@ -70,17 +71,21 @@ class _SampleQCPOMEPageState extends State<SampleQCPOMEPage> {
       final token = await getToken();
       final res = await api.getQcSamplingPomeVehicles("Bearer $token");
 
-      final list = res.data
-          ?.where((e) => e.hasSamplingData == true)
-          .map(
-            (e) => {
+      final list =
+          res.data?.where((e) => e.hasSamplingData == true).map((e) {
+            final registStatus = (e.registStatus ?? '').toLowerCase().trim();
+            final status = registStatus == 'random_check'
+                ? 'random_check'
+                : 'done';
+
+            return {
               "registration_id": e.registrationId ?? "-",
               "tiket_no": e.wbTicketNo ?? "-",
               "plat": e.plateNumber ?? "-",
-              "status": "done"
-            },
-          )
-          .toList() ?? [];
+              "status": status,
+            };
+          }).toList() ??
+          [];
 
       setState(() {
         tickets = list.cast<Map<String, dynamic>>();
@@ -90,18 +95,30 @@ class _SampleQCPOMEPageState extends State<SampleQCPOMEPage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kCacheKey);
       await saveTicketsCache();
-
     } catch (e) {
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error fetch: $e")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error fetch: $e")));
 
       await loadCachedTickets();
     }
   }
 
-  Color _statusColor(String s) => Colors.green;
-  IconData _statusIcon(String s) => Icons.check_circle_outline;
+  Color _statusColor(String s) {
+    if (s == 'random_check') return Colors.yellow.shade700;
+    return Colors.green;
+  }
+
+  IconData _statusIcon(String s) {
+    if (s == 'random_check') return Icons.error_outline;
+    return Icons.check_circle_outline;
+  }
+
+  String _statusLabel(String s) {
+    if (s == 'random_check') return 'Pending Manager Approval';
+    return 'DONE';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,73 +127,94 @@ class _SampleQCPOMEPageState extends State<SampleQCPOMEPage> {
         title: const Text("Dashboard Sampling POME"),
         backgroundColor: Colors.blue,
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: fetchTickets)
+          IconButton(icon: const Icon(Icons.refresh), onPressed: fetchTickets),
         ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : tickets.isEmpty
-              ? const Center(
-                  child: Text(
-                    "Belum ada tiket yang sudah di-sample.",
-                    style: TextStyle(color: Colors.black54, fontSize: 16),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: fetchTickets,
-                  child: ListView.builder(
-                    itemCount: tickets.length,
-                    itemBuilder: (_, i) {
-                      final item = tickets[i];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+          ? const Center(
+              child: Text(
+                "Belum ada tiket yang sudah di-sample.",
+                style: TextStyle(color: Colors.black54, fontSize: 16),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: fetchTickets,
+              child: ListView.builder(
+                itemCount: tickets.length,
+                itemBuilder: (_, i) {
+                  final item = tickets[i];
+                  final status = (item["status"] as String? ?? 'done')
+                      .toLowerCase();
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Nomor Tiket Timbang : ${item["tiket_no"]}",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                "Nomor Tiket Timbang : ${item["tiket_no"]}",
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 14),
+                                item["plat"] ?? "-",
+                                style: const TextStyle(fontSize: 15),
                               ),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(item["plat"] ?? "-", style: const TextStyle(fontSize: 15)),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withOpacity(0.15),
-                                      border: Border.all(color: Colors.green),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      children: const [
-                                        Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
-                                        SizedBox(width: 4),
-                                        Text("DONE",
-                                            style: TextStyle(
-                                              color: Colors.green,
-                                              fontWeight: FontWeight.bold,
-                                            )),
-                                      ],
-                                    ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _statusColor(status).withOpacity(0.15),
+                                  border: Border.all(
+                                    color: _statusColor(status),
                                   ),
-                                ],
-                              )
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _statusIcon(status),
+                                      size: 16,
+                                      color: _statusColor(status),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _statusLabel(status),
+                                      style: TextStyle(
+                                        color: _statusColor(status),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
 
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.blue,

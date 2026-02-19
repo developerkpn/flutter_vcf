@@ -12,11 +12,7 @@ class QCLabPOMEPage extends StatefulWidget {
   final String userId;
   final String token;
 
-  const QCLabPOMEPage({
-    super.key,
-    required this.userId,
-    required this.token,
-  });
+  const QCLabPOMEPage({super.key, required this.userId, required this.token});
 
   @override
   State<QCLabPOMEPage> createState() => _QCLabPOMEPageState();
@@ -47,19 +43,18 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
       final token = await getToken();
       final res = await api.getQcLabPomeVehicles("Bearer $token");
 
-      final vehicles = (res.data ?? [])
-    .where((v) {
-      final s = v.registStatus?.toLowerCase() ?? "";
-      final lab = v.labStatus?.toLowerCase();
+      final vehicles = (res.data ?? []).where((v) {
+        final s = v.registStatus?.toLowerCase() ?? "";
+        final lab = v.labStatus?.toLowerCase();
 
-      // rule:
-      // show only if already processed OR in HOLD
-      return s == "qc_lab_hold" ||
-             s == "unloading" ||
-             s == "qc_lab_rejected" ||
-             (s == "qc_lab" && lab != null); 
-    })
-    .toList();
+        // rule:
+        // show only if already processed OR in HOLD
+        return s == "qc_lab_hold" ||
+            s == "unloading" ||
+            s == "qc_lab_rejected" ||
+            s == "random_check" ||
+            (s == "qc_lab" && lab != null);
+      }).toList();
 
       setState(() {
         tickets = vehicles;
@@ -67,45 +62,62 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
       });
     } catch (e) {
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"))
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
 
   // Label berdasarkan lab_status
   String statusLabel(String lab) {
     switch (lab) {
-      case "approved": return "APPROVED";
-      case "hold": return "HOLD";
-      case "rejected": return "REJECTED";
-      default: return "PENDING";
+      case "approved":
+        return "APPROVED";
+      case "hold":
+        return "HOLD";
+      case "rejected":
+        return "REJECTED";
+      default:
+        return "PENDING";
     }
   }
 
   Color statusColor(String lab) {
     switch (lab) {
-      case "approved": return Colors.green;
-      case "hold": return Colors.orange;
-      case "rejected": return Colors.red;
-      default: return Colors.grey;
+      case "approved":
+        return Colors.green;
+      case "hold":
+        return Colors.orange;
+      case "rejected":
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
   }
 
   IconData statusIcon(String lab) {
     switch (lab) {
-      case "approved": return Icons.check_circle_outline;
-      case "hold": return Icons.pause_circle_outline;
-      case "rejected": return Icons.cancel_outlined;
-      default: return Icons.hourglass_bottom;
+      case "approved":
+        return Icons.check_circle_outline;
+      case "hold":
+        return Icons.pause_circle_outline;
+      case "rejected":
+        return Icons.cancel_outlined;
+      default:
+        return Icons.hourglass_bottom;
     }
+  }
+
+  bool _isPendingManagerApproval(QcLabPomeVehicle v) {
+    return (v.registStatus ?? '').toLowerCase().trim() == 'random_check';
   }
 
   Future<void> _openAddPage() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) =>
-          AddLabPOMEPage(userId: widget.userId, token: widget.token),
+      MaterialPageRoute(
+        builder: (_) =>
+            AddLabPOMEPage(userId: widget.userId, token: widget.token),
       ),
     );
 
@@ -115,8 +127,8 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
   Future<void> _openEditPage(QcLabPomeVehicle v) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) =>
-          InputLabPOMEPage(token: widget.token, model: v),
+      MaterialPageRoute(
+        builder: (_) => InputLabPOMEPage(token: widget.token, model: v),
       ),
     );
 
@@ -130,66 +142,76 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
         title: const Text("Dashboard QC Lab POME"),
         backgroundColor: Colors.blue,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: fetchTickets,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: fetchTickets),
         ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : tickets.isEmpty
-              ? const Center(
-                  child: Text(
-                    "Belum ada tiket QC Lab POME",
-                    style: TextStyle(color: Colors.black54, fontSize: 16),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: tickets.length,
-                  itemBuilder: (_, i) {
-                    final t = tickets[i];
+          ? const Center(
+              child: Text(
+                "Belum ada tiket QC Lab POME",
+                style: TextStyle(color: Colors.black54, fontSize: 16),
+              ),
+            )
+          : ListView.builder(
+              itemCount: tickets.length,
+              itemBuilder: (_, i) {
+                final t = tickets[i];
 
-                    final lab = (t.labStatus ?? "").toLowerCase();
+                final lab = (t.labStatus ?? "").toLowerCase();
+                final isPendingManagerApproval = _isPendingManagerApproval(t);
+                final chipColor = isPendingManagerApproval
+                    ? Colors.yellow.shade700
+                    : statusColor(lab);
+                final chipIcon = isPendingManagerApproval
+                    ? Icons.error_outline
+                    : statusIcon(lab);
+                final chipLabel = isPendingManagerApproval
+                    ? 'Pending Manager Approval'
+                    : statusLabel(lab);
 
-                    return GestureDetector(
-                      onTap: () {
-                        if (lab == "hold") _openEditPage(t);
-                      },
-                      child: Card(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: ListTile(
-                          title: Text("Tiket: ${t.wbTicketNo ?? '-'}"),
-                          subtitle: Text("Plat: ${t.plateNumber ?? '-'}"),
-                          trailing: Chip(
-                            backgroundColor: statusColor(lab).withOpacity(0.15),
-                            side: BorderSide(color: statusColor(lab)),
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(statusIcon(lab),
-                                    color: statusColor(lab), size: 16),
-                                const SizedBox(width: 4),
-                                Text(
-                                  statusLabel(lab),
-                                  style: TextStyle(
-                                    color: statusColor(lab),
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
+                return GestureDetector(
+                  onTap: () {
+                    if (!isPendingManagerApproval && lab == "hold") {
+                      _openEditPage(t);
+                    }
+                  },
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ListTile(
+                      title: Text("Tiket: ${t.wbTicketNo ?? '-'}"),
+                      subtitle: Text("Plat: ${t.plateNumber ?? '-'}"),
+                      trailing: Chip(
+                        backgroundColor: chipColor.withOpacity(0.15),
+                        side: BorderSide(color: chipColor),
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(chipIcon, color: chipColor, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              chipLabel,
+                              style: TextStyle(
+                                color: chipColor,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.blue,
         child: const Icon(Icons.add, color: Colors.white),

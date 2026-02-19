@@ -41,6 +41,7 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
     final v = (s ?? "").toLowerCase().trim();
 
     if (v == "hold" || v == "unloading_hold") return "unloading_hold";
+    if (v == "random_check") return "random_check";
     if (v == "approved" || v == "wb_out") return "wb_out";
     if (v == "rejected" || v == "unloading_rejected") return "rejected";
 
@@ -56,6 +57,8 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
         return "HOLD";
       case "wb_out":
         return "APPROVED";
+      case "random_check":
+        return "Pending Manager Approval";
       case "rejected":
         return "REJECTED";
       default:
@@ -69,6 +72,8 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
         return Colors.orange;
       case "wb_out":
         return Colors.green;
+      case "random_check":
+        return Colors.yellow.shade700;
       case "rejected":
         return Colors.red;
       default:
@@ -82,6 +87,8 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
         return Icons.pause_circle_outline;
       case "wb_out":
         return Icons.check_circle_outline;
+      case "random_check":
+        return Icons.error_outline;
       case "rejected":
         return Icons.cancel_outlined;
       default:
@@ -158,7 +165,9 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
                   : e.regist_status,
             );
 
-            return status == "unloading_hold" || status == "wb_out";
+            return status == "unloading_hold" ||
+                status == "wb_out" ||
+                status == "random_check";
           }).toList();
 
           if (unloadingTrucks.isEmpty) {
