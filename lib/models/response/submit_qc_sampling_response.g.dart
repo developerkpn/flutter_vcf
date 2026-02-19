@@ -30,6 +30,8 @@ CpoSamplingData _$CpoSamplingDataFromJson(Map<String, dynamic> json) =>
       registrationId: json['registration_id'] as String?,
       oilTemp: json['oil_temp'] as String?,
       visualColor: json['visual_color'] as String?,
+      sampledAt: json['sampled_at'] as String?,
+      sampledBy: json['sampled_by'] as String?,
       photos: (json['photos'] as List<dynamic>?)
           ?.map((e) => CpoSamplingPhoto.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -41,6 +43,8 @@ Map<String, dynamic> _$CpoSamplingDataToJson(CpoSamplingData instance) =>
       'registration_id': instance.registrationId,
       'oil_temp': instance.oilTemp,
       'visual_color': instance.visualColor,
+      'sampled_at': instance.sampledAt,
+      'sampled_by': instance.sampledBy,
       'photos': instance.photos,
     };
 
