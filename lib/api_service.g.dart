@@ -118,6 +118,37 @@ class _ApiService implements ApiService {
   }
 
   @override
+  Future<SubmitQcSamplingResponse> getQcSamplingCpoDetail(
+    String token,
+    String registrationId,
+  ) async {
+    final _extra = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{};
+    final _headers = <String, dynamic>{r'Authorization': token};
+    _headers.removeWhere((k, v) => v == null);
+    const Map<String, dynamic>? _data = null;
+    final _options = _setStreamType<SubmitQcSamplingResponse>(
+      Options(method: 'GET', headers: _headers, extra: _extra)
+          .compose(
+            _dio.options,
+            '/qc/sampling/cpo/${registrationId}',
+            queryParameters: queryParameters,
+            data: _data,
+          )
+          .copyWith(baseUrl: _combineBaseUrls(_dio.options.baseUrl, baseUrl)),
+    );
+    final _result = await _dio.fetch<Map<String, dynamic>>(_options);
+    late SubmitQcSamplingResponse _value;
+    try {
+      _value = SubmitQcSamplingResponse.fromJson(_result.data!);
+    } on Object catch (e, s) {
+      errorLogger?.logError(e, s, _options);
+      rethrow;
+    }
+    return _value;
+  }
+
+  @override
   Future<QcLabCpoStatisticsResponse> getQcLabCpoStatistics(
     String token, {
     String? dateFrom,
@@ -540,6 +571,37 @@ class _ApiService implements ApiService {
           .compose(
             _dio.options,
             '/qc/sampling/pome/create',
+            queryParameters: queryParameters,
+            data: _data,
+          )
+          .copyWith(baseUrl: _combineBaseUrls(_dio.options.baseUrl, baseUrl)),
+    );
+    final _result = await _dio.fetch<Map<String, dynamic>>(_options);
+    late SubmitQcSamplingPomeResponse _value;
+    try {
+      _value = SubmitQcSamplingPomeResponse.fromJson(_result.data!);
+    } on Object catch (e, s) {
+      errorLogger?.logError(e, s, _options);
+      rethrow;
+    }
+    return _value;
+  }
+
+  @override
+  Future<SubmitQcSamplingPomeResponse> getQcSamplingPomeDetail(
+    String token,
+    String registrationId,
+  ) async {
+    final _extra = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{};
+    final _headers = <String, dynamic>{r'Authorization': token};
+    _headers.removeWhere((k, v) => v == null);
+    const Map<String, dynamic>? _data = null;
+    final _options = _setStreamType<SubmitQcSamplingPomeResponse>(
+      Options(method: 'GET', headers: _headers, extra: _extra)
+          .compose(
+            _dio.options,
+            '/qc/sampling/pome/${registrationId}',
             queryParameters: queryParameters,
             data: _data,
           )

@@ -68,6 +68,12 @@ abstract class ApiService {
     @Body() Map<String, dynamic> payload,
   );
 
+  @GET("/qc/sampling/cpo/{registrationId}")
+  Future<SubmitQcSamplingResponse> getQcSamplingCpoDetail(
+    @Header("Authorization") String token,
+    @Path("registrationId") String registrationId,
+  );
+
   //Lab CPO =================
   @GET("/qc/lab/cpo/statistics")
   Future<QcLabCpoStatisticsResponse> getQcLabCpoStatistics(
@@ -147,6 +153,12 @@ abstract class ApiService {
   Future<SubmitQcSamplingPomeResponse> submitQcSamplingPome(
     @Header("Authorization") String token,
     @Body() Map<String, dynamic> payload,
+  );
+
+  @GET("/qc/sampling/pome/{registrationId}")
+  Future<SubmitQcSamplingPomeResponse> getQcSamplingPomeDetail(
+    @Header("Authorization") String token,
+    @Path("registrationId") String registrationId,
   );
 
   // QC Lab POME ======================

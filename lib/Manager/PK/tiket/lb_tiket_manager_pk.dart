@@ -103,12 +103,19 @@ class _LbTiketManagerPKPageState extends State<LbTiketManagerPKPage> {
                 itemCount: tickets.length,
                 itemBuilder: (_, i) {
                   final ticket = tickets[i];
-                  final latestStatus = (ticket.latest_check_status ?? '')
+                  final rawLatestStatus = (ticket.latest_check_status ?? '')
                       .toUpperCase()
                       .trim();
+                  final latestStatus = rawLatestStatus == 'APPROVED'
+                    ? 'APPROVE'
+                    : rawLatestStatus == 'REJECTED'
+                    ? 'REJECT'
+                    : rawLatestStatus;
                   final isPendingCheck = latestStatus == 'PENDING';
+                  final isFinalChecked =
+                    latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
-                  final isChecked = hasManagerCheck && !isPendingCheck;
+                  final isChecked = hasManagerCheck && isFinalChecked;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -125,7 +132,7 @@ class _LbTiketManagerPKPageState extends State<LbTiketManagerPKPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                "Already checked: ${ticket.latest_check_status ?? 'DONE'}",
+                                "Already checked: ${latestStatus.isNotEmpty ? latestStatus : 'DONE'}",
                               ),
                               backgroundColor: Colors.orange,
                             ),
@@ -183,8 +190,9 @@ class _LbTiketManagerPKPageState extends State<LbTiketManagerPKPage> {
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          ticket.latest_check_status ??
-                                              "Checked",
+                                          latestStatus.isNotEmpty
+                                              ? latestStatus
+                                              : "Checked",
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.grey.shade700,
@@ -307,6 +315,7 @@ class _ManagerLabCheckInputPage extends StatefulWidget {
 
 class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   ManagerCheckDetail? detail;
+  Map<String, dynamic>? operatorLabData;
   bool isLoading = true;
   bool isSubmitting = false;
 
@@ -356,9 +365,42 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         registrationId,
         "lab",
       );
+
+      Map<String, dynamic>? fallbackLabData;
+      final managerLabData = res.data?.lab_data;
+      final managerLabDataEmpty =
+          managerLabData == null || managerLabData.isEmpty;
+
+      if (managerLabDataEmpty) {
+        try {
+          final labRes = await api.getLabPkDetail(
+            "Bearer ${widget.token}",
+            registrationId,
+          );
+          final records = labRes.data?.labRecords ?? [];
+          if (records.isNotEmpty) {
+            final sorted = [...records]
+              ..sort((a, b) => (a.counter ?? 0).compareTo(b.counter ?? 0));
+            final latest = sorted.last;
+            fallbackLabData = {
+              'counter': latest.counter,
+              'ffa': latest.ffa,
+              'moisture': latest.moisture,
+              'dirt': latest.dirt,
+              'oil_content': latest.oilContent,
+              'tested_by': latest.testedBy,
+              'tested_at': latest.testedAt,
+            };
+          }
+        } catch (_) {
+          fallbackLabData = null;
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         detail = res.data;
+        operatorLabData = managerLabDataEmpty ? fallbackLabData : managerLabData;
         isLoading = false;
       });
     } catch (e) {
@@ -685,31 +727,31 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
                           const Divider(),
                           _readOnlyField(
                             "Counter (Resample)",
-                            "${detail?.lab_data?['counter'] ?? '-'}",
+                            "${operatorLabData?['counter'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "FFA",
-                            "${detail?.lab_data?['ffa'] ?? '-'}",
+                            "${operatorLabData?['ffa'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Moisture",
-                            "${detail?.lab_data?['moisture'] ?? '-'}",
+                            "${operatorLabData?['moisture'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Dirt",
-                            "${detail?.lab_data?['dirt'] ?? '-'}",
+                            "${operatorLabData?['dirt'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Oil Content",
-                            "${detail?.lab_data?['oil_content'] ?? '-'}",
+                            "${operatorLabData?['oil_content'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Tested By",
-                            "${detail?.lab_data?['tested_by'] ?? '-'}",
+                            "${operatorLabData?['tested_by'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Tested At",
-                            "${detail?.lab_data?['tested_at'] ?? '-'}",
+                            "${operatorLabData?['tested_at'] ?? '-'}",
                           ),
                         ],
                       ),

@@ -101,12 +101,19 @@ class _LbTiketManagerCPOPageState extends State<LbTiketManagerCPOPage> {
                 itemCount: tickets.length,
                 itemBuilder: (_, i) {
                   final ticket = tickets[i];
-                  final latestStatus = (ticket.latest_check_status ?? '')
+                  final rawLatestStatus = (ticket.latest_check_status ?? '')
                       .toUpperCase()
                       .trim();
+                  final latestStatus = rawLatestStatus == 'APPROVED'
+                    ? 'APPROVE'
+                    : rawLatestStatus == 'REJECTED'
+                    ? 'REJECT'
+                    : rawLatestStatus;
                   final isPendingCheck = latestStatus == 'PENDING';
+                  final isFinalChecked =
+                    latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
-                  final isChecked = hasManagerCheck && !isPendingCheck;
+                  final isChecked = hasManagerCheck && isFinalChecked;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -123,7 +130,7 @@ class _LbTiketManagerCPOPageState extends State<LbTiketManagerCPOPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                "Already checked: ${ticket.latest_check_status ?? 'DONE'}",
+                                "Already checked: ${latestStatus.isNotEmpty ? latestStatus : 'DONE'}",
                               ),
                               backgroundColor: Colors.orange,
                             ),
@@ -181,8 +188,9 @@ class _LbTiketManagerCPOPageState extends State<LbTiketManagerCPOPage> {
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          ticket.latest_check_status ??
-                                              "Checked",
+                                          latestStatus.isNotEmpty
+                                              ? latestStatus
+                                              : "Checked",
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.grey.shade700,
@@ -305,6 +313,7 @@ class _ManagerLabCheckInputPage extends StatefulWidget {
 
 class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   ManagerCheckDetail? detail;
+  Map<String, dynamic>? operatorLabData;
   bool isLoading = true;
   bool isSubmitting = false;
 
@@ -340,8 +349,37 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         widget.ticket.registration_id!,
         "lab",
       );
+
+      Map<String, dynamic>? fallbackLabData;
+      final managerLabData = res.data?.lab_data;
+      final managerLabDataEmpty =
+          managerLabData == null || managerLabData.isEmpty;
+
+      if (managerLabDataEmpty) {
+        try {
+          final labRes = await api.getLabCpoDetail(
+            "Bearer ${widget.token}",
+            widget.ticket.registration_id!,
+          );
+          final data = labRes.data;
+          if (data != null) {
+            fallbackLabData = {
+              'ffa': data.ffa,
+              'moisture': data.moisture,
+              'dobi': data.dobi,
+              'iv': data.iv,
+              'tested_by': data.testedBy,
+              'tested_at': data.testedAt,
+            };
+          }
+        } catch (_) {
+          fallbackLabData = null;
+        }
+      }
+
       setState(() {
         detail = res.data;
+        operatorLabData = managerLabDataEmpty ? fallbackLabData : managerLabData;
         isLoading = false;
       });
     } catch (e) {
@@ -648,27 +686,27 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
                           const Divider(),
                           _readOnlyField(
                             "FFA",
-                            "${detail?.lab_data?['ffa'] ?? '-'}",
+                            "${operatorLabData?['ffa'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Moisture",
-                            "${detail?.lab_data?['moisture'] ?? '-'}",
+                            "${operatorLabData?['moisture'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "DOBI",
-                            "${detail?.lab_data?['dobi'] ?? '-'}",
+                            "${operatorLabData?['dobi'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "IV",
-                            "${detail?.lab_data?['iv'] ?? '-'}",
+                            "${operatorLabData?['iv'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Tested By",
-                            "${detail?.lab_data?['tested_by'] ?? '-'}",
+                            "${operatorLabData?['tested_by'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Tested At",
-                            "${detail?.lab_data?['tested_at'] ?? '-'}",
+                            "${operatorLabData?['tested_at'] ?? '-'}",
                           ),
                         ],
                       ),

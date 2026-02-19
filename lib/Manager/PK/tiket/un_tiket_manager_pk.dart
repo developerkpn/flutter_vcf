@@ -105,12 +105,19 @@ class _UnTiketManagerPKPageState extends State<UnTiketManagerPKPage> {
                 itemCount: tickets.length,
                 itemBuilder: (_, i) {
                   final ticket = tickets[i];
-                  final latestStatus = (ticket.latest_check_status ?? '')
+                  final rawLatestStatus = (ticket.latest_check_status ?? '')
                       .toUpperCase()
                       .trim();
+                  final latestStatus = rawLatestStatus == 'APPROVED'
+                    ? 'APPROVE'
+                    : rawLatestStatus == 'REJECTED'
+                    ? 'REJECT'
+                    : rawLatestStatus;
                   final isPendingCheck = latestStatus == 'PENDING';
+                  final isFinalChecked =
+                    latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
-                  final isChecked = hasManagerCheck && !isPendingCheck;
+                  final isChecked = hasManagerCheck && isFinalChecked;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -127,7 +134,7 @@ class _UnTiketManagerPKPageState extends State<UnTiketManagerPKPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                "Already checked: ${ticket.latest_check_status ?? 'DONE'}",
+                                "Already checked: ${latestStatus.isNotEmpty ? latestStatus : 'DONE'}",
                               ),
                               backgroundColor: Colors.orange,
                             ),
@@ -185,8 +192,9 @@ class _UnTiketManagerPKPageState extends State<UnTiketManagerPKPage> {
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          ticket.latest_check_status ??
-                                              "Checked",
+                                          latestStatus.isNotEmpty
+                                              ? latestStatus
+                                              : "Checked",
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.grey.shade700,

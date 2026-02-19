@@ -50,6 +50,35 @@ class _SpTiketManagerCPOPageState extends State<SpTiketManagerCPOPage> {
     return token;
   }
 
+  List<ManagerCheckTicket> _dedupeTickets(List<ManagerCheckTicket> source) {
+    final Map<String, ManagerCheckTicket> map = {};
+
+    String keyOf(ManagerCheckTicket ticket) {
+      final reg = ticket.registration_id?.trim();
+      if (reg != null && reg.isNotEmpty) return reg;
+      return "${ticket.wb_ticket_no ?? '-'}|${ticket.plate_number ?? '-'}";
+    }
+
+    int priorityOf(ManagerCheckTicket ticket) {
+      final latest = (ticket.latest_check_status ?? '').toUpperCase().trim();
+      if (latest == 'PENDING') return 3;
+      if (latest == 'APPROVE' || latest == 'APPROVED') return 2;
+      if (latest == 'REJECT' || latest == 'REJECTED') return 2;
+      if (ticket.has_manager_check == true) return 1;
+      return 0;
+    }
+
+    for (final ticket in source) {
+      final key = keyOf(ticket);
+      final current = map[key];
+      if (current == null || priorityOf(ticket) > priorityOf(current)) {
+        map[key] = ticket;
+      }
+    }
+
+    return map.values.toList();
+  }
+
   Future<void> fetchTickets() async {
     setState(() => isLoading = true);
     try {
@@ -61,7 +90,7 @@ class _SpTiketManagerCPOPageState extends State<SpTiketManagerCPOPage> {
       );
 
       setState(() {
-        tickets = res.data ?? [];
+        tickets = _dedupeTickets(res.data ?? []);
         isLoading = false;
       });
     } catch (e) {
@@ -97,12 +126,19 @@ class _SpTiketManagerCPOPageState extends State<SpTiketManagerCPOPage> {
                 itemCount: tickets.length,
                 itemBuilder: (_, i) {
                   final ticket = tickets[i];
-                  final latestStatus = (ticket.latest_check_status ?? '')
+                  final rawLatestStatus = (ticket.latest_check_status ?? '')
                       .toUpperCase()
                       .trim();
+                  final latestStatus = rawLatestStatus == 'APPROVED'
+                    ? 'APPROVE'
+                    : rawLatestStatus == 'REJECTED'
+                    ? 'REJECT'
+                    : rawLatestStatus;
                   final isPendingCheck = latestStatus == 'PENDING';
+                  final isFinalChecked =
+                    latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
-                  final isChecked = hasManagerCheck && !isPendingCheck;
+                  final isChecked = hasManagerCheck && isFinalChecked;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -119,7 +155,7 @@ class _SpTiketManagerCPOPageState extends State<SpTiketManagerCPOPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                "Already checked: ${ticket.latest_check_status ?? 'DONE'}",
+                                "Already checked: ${latestStatus.isNotEmpty ? latestStatus : 'DONE'}",
                               ),
                               backgroundColor: Colors.orange,
                             ),
@@ -177,8 +213,9 @@ class _SpTiketManagerCPOPageState extends State<SpTiketManagerCPOPage> {
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          ticket.latest_check_status ??
-                                              "Checked",
+                                          latestStatus.isNotEmpty
+                                              ? latestStatus
+                                              : "Checked",
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.grey.shade700,
@@ -245,6 +282,7 @@ class _ManagerSamplingCheckInputPage extends StatefulWidget {
 class _ManagerSamplingCheckInputPageState
     extends State<_ManagerSamplingCheckInputPage> {
   ManagerCheckDetail? detail;
+  Map<String, dynamic>? operatorSamplingData;
   bool isLoading = true;
   bool isSubmitting = false;
 
@@ -274,8 +312,37 @@ class _ManagerSamplingCheckInputPageState
         widget.ticket.registration_id!,
         "sampling",
       );
+
+      Map<String, dynamic>? fallbackSamplingData;
+      final managerSamplingData = res.data?.sampling_data;
+      final managerSamplingDataEmpty =
+          managerSamplingData == null || managerSamplingData.isEmpty;
+
+      if (managerSamplingDataEmpty) {
+        try {
+          final sampleRes = await api.getQcSamplingCpoDetail(
+            "Bearer ${widget.token}",
+            widget.ticket.registration_id!,
+          );
+          final data = sampleRes.data;
+          if (data != null) {
+            fallbackSamplingData = {
+              'oil_temp': data.oilTemp,
+              'visual_color': data.visualColor,
+              'sampled_by': data.sampledBy,
+              'sampled_at': data.sampledAt,
+            };
+          }
+        } catch (_) {
+          fallbackSamplingData = null;
+        }
+      }
+
       setState(() {
         detail = res.data;
+        operatorSamplingData = managerSamplingDataEmpty
+            ? fallbackSamplingData
+            : managerSamplingData;
         isLoading = false;
       });
     } catch (e) {
@@ -496,19 +563,19 @@ class _ManagerSamplingCheckInputPageState
                           const Divider(),
                           _readOnlyField(
                             "Oil Temperature",
-                            "${detail?.sampling_data?['oil_temp'] ?? '-'}",
+                            "${operatorSamplingData?['oil_temp'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Visual Color",
-                            "${detail?.sampling_data?['visual_color'] ?? '-'}",
+                            "${operatorSamplingData?['visual_color'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Sampled By",
-                            "${detail?.sampling_data?['sampled_by'] ?? '-'}",
+                            "${operatorSamplingData?['sampled_by'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Sampled At",
-                            "${detail?.sampling_data?['sampled_at'] ?? '-'}",
+                            "${operatorSamplingData?['sampled_at'] ?? '-'}",
                           ),
                         ],
                       ),
