@@ -49,8 +49,18 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
   String getTanggalIndonesia() {
     final now = DateTime.now();
     const bulan = [
-      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
     ];
     return "${now.day} ${bulan[now.month - 1]} ${now.year}";
   }
@@ -94,53 +104,98 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
   // ======================= LOAD PK STATISTICS ===========================
   Future<void> loadStatistics() async {
     final api = ApiService(AppConfig.createDio());
-    final prefs = await SharedPreferences.getInstance();
-
-    String? savedToken =
-        prefs.getString("jwt_token") ?? prefs.getString("token");
-
-    if (savedToken == null || savedToken.isEmpty) {
-      print("TOKEN PK TIDAK ADA");
-      return;
-    }
-
-    String token = savedToken.startsWith("Bearer ")
-        ? savedToken
-        : "Bearer $savedToken";
-
-    final now = DateTime.now();
-    String dateFrom = "${now.year}-01-01";
-    String dateTo = "${now.year}-12-31";
 
     try {
-      // SAMPLE PK
+      final prefs = await SharedPreferences.getInstance();
+      String? savedToken =
+          prefs.getString("jwt_token") ?? prefs.getString("token");
+
+      if (savedToken == null || savedToken.isEmpty) {
+        print("TOKEN PK TIDAK ADA");
+        return;
+      }
+
+      String token = savedToken.startsWith("Bearer ")
+          ? savedToken
+          : "Bearer $savedToken";
+
+      final now = DateTime.now();
+      String dateFrom = "${now.year}-01-01";
+      String dateTo = "${now.year}-12-31";
+
+      // Load operator statistics
       final sampleRes = await api.getQcSamplingStatsPK(
         token,
         dateFrom: dateFrom,
         dateTo: dateTo,
       );
-      totalSampleKeluar =
-          sampleRes.data?.statistics?.total_truk_keluar ?? 0;
 
-      // LAB PK
       final labRes = await api.getQcLabPkStatistics(
         token,
         dateFrom: dateFrom,
         dateTo: dateTo,
       );
-      totalLabKeluar =
-          labRes.data?.statistics?.total_truk_keluar ?? 0;
 
-      // UNLOADING PK
       final unloadRes = await api.getUnloadingPkStatistics(
         token,
         dateFrom: dateFrom,
         dateTo: dateTo,
       );
-      totalUnloadingKeluar =
-          unloadRes.data?.statistics?.totalTrukKeluar ?? 0;
 
-      setState(() {});
+      // Load manager check statistics
+      final managerStats = await api.getManagerCheckStatistics(token);
+
+      // Fetch tickets by stage to count pending checks
+      final samplingTickets = await api.getManagerCheckTickets(
+        token,
+        "PK",
+        stage: "sampling",
+      );
+
+      final labTickets = await api.getManagerCheckTickets(
+        token,
+        "PK",
+        stage: "lab",
+      );
+
+      final unloadingTickets = await api.getManagerCheckTickets(
+        token,
+        "PK",
+        stage: "unloading",
+      );
+
+      setState(() {
+        totalSampleKeluar = sampleRes.data?.statistics?.total_truk_keluar ?? 0;
+        totalLabKeluar = labRes.data?.statistics?.total_truk_keluar ?? 0;
+        totalUnloadingKeluar = unloadRes.data?.statistics?.totalTrukKeluar ?? 0;
+
+        final byStage = managerStats.data?.by_stage;
+        if (byStage != null) {
+          final sampling = byStage['sampling'];
+          final lab = byStage['lab'];
+          final unloading = byStage['unloading'];
+
+          samplingApprovedChecks = sampling?.approved ?? 0;
+          labApprovedChecks = lab?.approved ?? 0;
+          unloadingApprovedChecks = unloading?.approved ?? 0;
+        }
+
+        samplingPendingChecks =
+            samplingTickets.data
+                ?.where((t) => !(t.has_manager_check ?? false))
+                .length ??
+            0;
+        labPendingChecks =
+            labTickets.data
+                ?.where((t) => !(t.has_manager_check ?? false))
+                .length ??
+            0;
+        unloadingPendingChecks =
+            unloadingTickets.data
+                ?.where((t) => !(t.has_manager_check ?? false))
+                .length ??
+            0;
+      });
     } catch (e) {
       print("ERROR LOAD STATISTICS PK: $e");
     }
@@ -204,14 +259,20 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                 if (value == halamanAktif) return;
 
                 if (value == "CPO") {
-                  Navigator.pushReplacement(context,
-                      MaterialPageRoute(builder: (_) => const ManagerHomeSwipe()));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ManagerHomeSwipe()),
+                  );
                 } else if (value == "POME") {
-                  Navigator.pushReplacement(context,
-                      MaterialPageRoute(builder: (_) => const HomeManagerPome()));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HomeManagerPome()),
+                  );
                 } else if (value == "PK") {
-                  Navigator.pushReplacement(context,
-                      MaterialPageRoute(builder: (_) => const HomeManagerPk()));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HomeManagerPk()),
+                  );
                 }
               },
               itemBuilder: (context) => [
@@ -219,7 +280,11 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                 PopupMenuItem(value: "POME", child: Text("POME")),
                 PopupMenuItem(value: "PK", child: Text("PK")),
               ],
-              child: const Icon(Icons.arrow_drop_down, color: Colors.white, size: 34),
+              child: const Icon(
+                Icons.arrow_drop_down,
+                color: Colors.white,
+                size: 34,
+              ),
             ),
           ],
         ),
@@ -238,8 +303,10 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
           children: [
             const DrawerHeader(
               decoration: BoxDecoration(color: Colors.blue),
-              child:
-                  Text("Menu VCF", style: TextStyle(color: Colors.white, fontSize: 18)),
+              child: Text(
+                "Menu VCF",
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
             ),
             ListTile(
               leading: const Icon(Icons.logout),
@@ -262,20 +329,28 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Hai, Manager 👋",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              const Text(
+                "Hai, Manager 👋",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 4),
-              Text("Selamat datang di VEHICLE CONTROL SYSTEM",
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+              Text(
+                "Selamat datang di VEHICLE CONTROL SYSTEM",
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              ),
 
               const SizedBox(height: 28),
 
               Center(
                 child: Column(
                   children: [
-                    const Text("QC Sample PK",
-                        style:
-                            TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                    const Text(
+                      "QC Sample PK",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Container(
                       height: 3,
@@ -334,8 +409,20 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                       },
                     ),
 
-                    Positioned(left: 0, child: _circleNavBtn(Icons.chevron_left_rounded, prevPage)),
-                    Positioned(right: 0, child: _circleNavBtn(Icons.chevron_right_rounded, nextPage)),
+                    Positioned(
+                      left: 0,
+                      child: _circleNavBtn(
+                        Icons.chevron_left_rounded,
+                        prevPage,
+                      ),
+                    ),
+                    Positioned(
+                      right: 0,
+                      child: _circleNavBtn(
+                        Icons.chevron_right_rounded,
+                        nextPage,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -359,16 +446,27 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                         physics: const NeverScrollableScrollPhysics(),
                         onPageChanged: (i) => setState(() => infoIndex = i),
                         children: [
-                          _infoCard("Total Sample Truk Keluar", "$totalSampleKeluar"),
+                          _infoCard(
+                            "Total Sample Truk Keluar",
+                            "$totalSampleKeluar",
+                          ),
                           _infoCard("Total LAB Truk Keluar", "$totalLabKeluar"),
-                          _infoCard("Total Unloading Truk Keluar", "$totalUnloadingKeluar"),
+                          _infoCard(
+                            "Total Unloading Truk Keluar",
+                            "$totalUnloadingKeluar",
+                          ),
                         ],
                       ),
                     ),
 
                     const SizedBox(width: 12),
 
-                    Expanded(child: _infoCard("Tanggal Hari Ini", getTanggalIndonesia())),
+                    Expanded(
+                      child: _infoCard(
+                        "Tanggal Hari Ini",
+                        getTanggalIndonesia(),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -407,9 +505,10 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
         children: [
           Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
           const SizedBox(height: 4),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.bold)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );
@@ -427,7 +526,7 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
             color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
             offset: const Offset(0, 3),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -448,8 +547,10 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                     alignment: Alignment.center,
                     child: const Text(
                       "Input Data PK",
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -475,9 +576,10 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                     child: const Text(
                       "Cek Total Truk",
                       style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -491,14 +593,17 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeInOut,
             child: showInputOptions
-                    ? Column( 
-                        children: [ 
+                ? Column(
+                    children: [
                       _optionItem(
                         "Sample",
                         Icons.science,
                         onTap: () async {
                           final prefs = await SharedPreferences.getInstance();
-                          final token = prefs.getString("jwt_token") ?? prefs.getString("token") ?? "";
+                          final token =
+                              prefs.getString("jwt_token") ??
+                              prefs.getString("token") ??
+                              "";
 
                           Navigator.push(
                             context,
@@ -511,13 +616,16 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                           );
                         },
                       ),
-                          const SizedBox(height: 10), 
+                      const SizedBox(height: 10),
                       _optionItem(
                         "QC Lab",
                         Icons.biotech,
                         onTap: () async {
                           final prefs = await SharedPreferences.getInstance();
-                          final token = prefs.getString("jwt_token") ?? prefs.getString("token") ?? "";
+                          final token =
+                              prefs.getString("jwt_token") ??
+                              prefs.getString("token") ??
+                              "";
 
                           Navigator.push(
                             context,
@@ -530,13 +638,16 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                           );
                         },
                       ),
-                          const SizedBox(height: 10), 
+                      const SizedBox(height: 10),
                       _optionItem(
                         "Unloading",
                         Icons.local_shipping,
                         onTap: () async {
                           final prefs = await SharedPreferences.getInstance();
-                          final token = prefs.getString("jwt_token") ?? prefs.getString("token") ?? "";
+                          final token =
+                              prefs.getString("jwt_token") ??
+                              prefs.getString("token") ??
+                              "";
 
                           Navigator.push(
                             context,
@@ -549,8 +660,8 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                           );
                         },
                       ),
-                        ], 
-                      ) 
+                    ],
+                  )
                 : const SizedBox(),
           ),
         ],
@@ -570,9 +681,10 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
         children: [
           Icon(icon, color: Colors.blue),
           const SizedBox(width: 12),
-          Text(title,
-              style:
-                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
@@ -661,7 +773,10 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
               top: 16,
               left: 16,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(12),

@@ -98,7 +98,12 @@ class _SpTiketManagerPKPageState extends State<SpTiketManagerPKPage> {
                 itemCount: tickets.length,
                 itemBuilder: (_, i) {
                   final ticket = tickets[i];
-                  final isChecked = ticket.has_manager_check == true;
+                  final latestStatus = (ticket.latest_check_status ?? '')
+                      .toUpperCase()
+                      .trim();
+                  final isPendingCheck = latestStatus == 'PENDING';
+                  final hasManagerCheck = ticket.has_manager_check == true;
+                  final isChecked = hasManagerCheck && !isPendingCheck;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -153,7 +158,7 @@ class _SpTiketManagerPKPageState extends State<SpTiketManagerPKPage> {
                                     ),
                                   ),
                                 ),
-                                if (isChecked)
+                                if (hasManagerCheck)
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 8,

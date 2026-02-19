@@ -101,7 +101,12 @@ class _LbTiketManagerCPOPageState extends State<LbTiketManagerCPOPage> {
                 itemCount: tickets.length,
                 itemBuilder: (_, i) {
                   final ticket = tickets[i];
-                  final isChecked = ticket.has_manager_check == true;
+                  final latestStatus = (ticket.latest_check_status ?? '')
+                      .toUpperCase()
+                      .trim();
+                  final isPendingCheck = latestStatus == 'PENDING';
+                  final hasManagerCheck = ticket.has_manager_check == true;
+                  final isChecked = hasManagerCheck && !isPendingCheck;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -156,7 +161,7 @@ class _LbTiketManagerCPOPageState extends State<LbTiketManagerCPOPage> {
                                     ),
                                   ),
                                 ),
-                                if (isChecked)
+                                if (hasManagerCheck)
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 8,
@@ -351,18 +356,30 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
     debugPrint('[Manager Lab Check] Starting submission');
     debugPrint('[Manager Lab Check] Status: $status');
     debugPrint('[Manager Lab Check] Process ID: ${widget.ticket.process_id}');
-    debugPrint('[Manager Lab Check] Registration ID: ${widget.ticket.registration_id}');
+    debugPrint(
+      '[Manager Lab Check] Registration ID: ${widget.ticket.registration_id}',
+    );
 
     // Validate required fields
     if (ffaCtrl.text.isEmpty ||
         moistCtrl.text.isEmpty ||
         dobiCtrl.text.isEmpty ||
         ivCtrl.text.isEmpty) {
-      debugPrint('[Manager Lab Check] Validation failed: Empty required fields');
-      debugPrint('[Manager Lab Check] FFA: ${ffaCtrl.text.isEmpty ? "EMPTY" : ffaCtrl.text}');
-      debugPrint('[Manager Lab Check] Moisture: ${moistCtrl.text.isEmpty ? "EMPTY" : moistCtrl.text}');
-      debugPrint('[Manager Lab Check] DOBI: ${dobiCtrl.text.isEmpty ? "EMPTY" : dobiCtrl.text}');
-      debugPrint('[Manager Lab Check] IV: ${ivCtrl.text.isEmpty ? "EMPTY" : ivCtrl.text}');
+      debugPrint(
+        '[Manager Lab Check] Validation failed: Empty required fields',
+      );
+      debugPrint(
+        '[Manager Lab Check] FFA: ${ffaCtrl.text.isEmpty ? "EMPTY" : ffaCtrl.text}',
+      );
+      debugPrint(
+        '[Manager Lab Check] Moisture: ${moistCtrl.text.isEmpty ? "EMPTY" : moistCtrl.text}',
+      );
+      debugPrint(
+        '[Manager Lab Check] DOBI: ${dobiCtrl.text.isEmpty ? "EMPTY" : dobiCtrl.text}',
+      );
+      debugPrint(
+        '[Manager Lab Check] IV: ${ivCtrl.text.isEmpty ? "EMPTY" : ivCtrl.text}',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("All lab fields are required"),
@@ -471,7 +488,9 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
       debugPrint('[Manager Lab Check] Error message: ${e.message}');
       debugPrint('[Manager Lab Check] Status code: ${e.response?.statusCode}');
       debugPrint('[Manager Lab Check] Response data: ${e.response?.data}');
-      debugPrint('[Manager Lab Check] Request options: ${e.requestOptions.uri}');
+      debugPrint(
+        '[Manager Lab Check] Request options: ${e.requestOptions.uri}',
+      );
       debugPrint('[Manager Lab Check] Request data: ${e.requestOptions.data}');
 
       if (e.response?.statusCode == 409) {
@@ -486,7 +505,8 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         return;
       }
 
-      final errorMessage = e.response?.data?['message'] ?? e.message ?? 'Unknown error';
+      final errorMessage =
+          e.response?.data?['message'] ?? e.message ?? 'Unknown error';
       debugPrint('[Manager Lab Check] Showing error to user: $errorMessage');
 
       ScaffoldMessenger.of(context).showSnackBar(
