@@ -12,48 +12,56 @@ Vehicle Control System - Flutter Mobile App
 
 ### Running the App
 
-#### Development Mode (Local API)
+#### 1. Configure Environment
+
+Edit `.env` values (or keep defaults):
 
 ```bash
-flutter run --dart-define=USE_LOCAL_DEV=true
+APP_ENV=dev
+API_BASE_URL=
+DEV_API_BASE_URL_ANDROID=http://10.0.2.2:8000/api/
+DEV_API_BASE_URL=http://localhost:8000/api/
+PROD_API_BASE_URL=https://your-server.com/api/
 ```
 
-**For specific devices:**
-```bash
-# Android emulator
-flutter run --dart-define=USE_LOCAL_DEV=true -d android
+#### 2. Run
 
-# iOS simulator
-flutter run --dart-define=USE_LOCAL_DEV=true -d ios
+```bash
+flutter run
 ```
 
-#### Production Mode
+For production mode, set:
 
 ```bash
-flutter run --dart-define=USE_LOCAL_DEV=false
+APP_ENV=prod
 ```
 
 ### API Configuration
 
-The app uses different API URLs based on the `USE_LOCAL_DEV` flag:
+The app uses `.env` values loaded at startup (`flutter_dotenv`).
 
-- **Development (USE_LOCAL_DEV=true)**:
-  - Android Emulator: `http://10.0.2.2:8000/api/`
-  - iOS Simulator/macOS: `http://localhost:8000/api/`
+Supported variables:
 
-- **Production (USE_LOCAL_DEV=false)**:
-  - Production URL: `https://your-server.com/api/` (configure in `lib/config.dart`)
+- `APP_ENV`: `dev` or `prod`
+- `API_BASE_URL`: hard override for all environments (highest priority)
+- `DEV_API_BASE_URL_ANDROID`: dev URL for Android emulator
+- `DEV_API_BASE_URL`: dev URL for iOS/macOS/etc
+- `PROD_API_BASE_URL`: prod URL
+- `USE_LOCAL_DEV`: optional legacy bool fallback
 
 ### Environment Variables
 
-Unlike Node.js, Flutter doesn't use `.env` files by default. Instead, we use `--dart-define` flags:
+Unlike `--dart-define`, these are managed in `.env`.
 
 ```bash
 # Development
-flutter run --dart-define=USE_LOCAL_DEV=true
+APP_ENV=dev
+
+# Full override (highest priority)
+API_BASE_URL=https://staging.example.com/api/
 
 # Production
-flutter run --dart-define=USE_LOCAL_DEV=false
+APP_ENV=prod
 ```
 
 ### Other Commands
@@ -66,17 +74,17 @@ flutter pub get
 flutter pub run build_runner build --delete-conflicting-outputs
 
 # Build APK
-flutter build apk --dart-define=USE_LOCAL_DEV=false
+flutter build apk
 
 # Build iOS
-flutter build ios --dart-define=USE_LOCAL_DEV=false
+flutter build ios
 ```
 
 ### Troubleshooting
 
 **Issue: App connects to production URL instead of local**
-- Make sure you're running with `--dart-define=USE_LOCAL_DEV=true`
-- Check console logs for `🔧 [CONFIG]` messages to see which URL is being used
+- Make sure `.env` has `APP_ENV=dev`
+- Check logs for `[CONFIG] Resolved API_BASE_URL=...`
 
 **Issue: Cannot connect to local API on Android**
 - Android emulator uses `10.0.2.2` instead of `localhost`
