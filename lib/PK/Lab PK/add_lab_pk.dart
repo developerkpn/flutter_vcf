@@ -10,10 +10,7 @@ import 'input_lab_pk.dart';
 class AddLabPKPage extends StatefulWidget {
   final String userId;
 
-  const AddLabPKPage({
-    super.key,
-    required this.userId,
-  });
+  const AddLabPKPage({super.key, required this.userId});
 
   @override
   State<AddLabPKPage> createState() => _AddLabPKPageState();
@@ -48,7 +45,11 @@ class _AddLabPKPageState extends State<AddLabPKPage> {
       final vehicles = (res.data ?? []).where((v) {
         final regist = (v.registStatus ?? "").toLowerCase();
         final lab = v.labStatus;
-        return regist == "qc_lab" && (lab == null || lab.isEmpty);
+        final isLabEmpty = lab == null || lab.isEmpty;
+        final isInitialLab = regist == "qc_lab";
+        final isRelabStage = regist.startsWith("qc_relab");
+
+        return isLabEmpty && (isInitialLab || isRelabStage);
       }).toList();
 
       setState(() {
@@ -57,18 +58,16 @@ class _AddLabPKPageState extends State<AddLabPKPage> {
       });
     } catch (e) {
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Gagal fetch data: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Gagal fetch data: $e")));
     }
   }
 
   Future<void> _openInputPage(QcLabPkVehicle v) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => InputLabPKPage(model: v),
-      ),
+      MaterialPageRoute(builder: (_) => InputLabPKPage(model: v)),
     );
 
     if (result != null) Navigator.pop(context, result);
@@ -90,57 +89,60 @@ class _AddLabPKPageState extends State<AddLabPKPage> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : platList.isEmpty
-              ? const Center(child: Text("Tidak ada kendaraan."))
-              : Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Pilih Plat Kendaraan',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 10),
-
-                      /// DROPDOWN
-                      DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          labelText: 'Plat Kendaraan',
-                        ),
-                        value: selectedRegId,
-                        items: platList.map((v) {
-                          return DropdownMenuItem<String>(
-                            value: v.registrationId, 
-                            child: Text("${v.plateNumber} (${v.wbTicketNo ?? '-'})"),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            selectedRegId = value;
-                          });
-                        },
-                      ),
-
-                      const SizedBox(height: 30),
-
-                      Center(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.arrow_forward),
-                          label: const Text("Mulai QC Lab"),
-                          onPressed: selectedRegId == null
-                              ? null
-                              : () {
-                                  final selectedVehicle =
-                                      platList.firstWhere((x) => x.registrationId == selectedRegId);
-
-                                  _openInputPage(selectedVehicle);
-                                },
-                        ),
-                      ),
-                    ],
+          ? const Center(child: Text("Tidak ada kendaraan."))
+          : Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Pilih Plat Kendaraan',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                ),
+                  const SizedBox(height: 10),
+
+                  /// DROPDOWN
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Plat Kendaraan',
+                    ),
+                    value: selectedRegId,
+                    items: platList.map((v) {
+                      return DropdownMenuItem<String>(
+                        value: v.registrationId,
+                        child: Text(
+                          "${v.plateNumber} (${v.wbTicketNo ?? '-'})",
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedRegId = value;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  Center(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.arrow_forward),
+                      label: const Text("Mulai QC Lab"),
+                      onPressed: selectedRegId == null
+                          ? null
+                          : () {
+                              final selectedVehicle = platList.firstWhere(
+                                (x) => x.registrationId == selectedRegId,
+                              );
+
+                              _openInputPage(selectedVehicle);
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

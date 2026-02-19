@@ -74,7 +74,8 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
           final data = snapshot.data?.data ?? [];
 
           final readyVehicles = data.where((e) {
-            return (e.registStatus ?? "").toLowerCase() == "unloading";
+            final registStatus = (e.registStatus ?? "").toLowerCase();
+            return registStatus == "unloading" || registStatus == "qc_reunloading";
           }).toList();
 
           final uniquePlates = readyVehicles

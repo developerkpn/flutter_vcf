@@ -35,10 +35,15 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
     // HOLD tahap unloading (sudah selesai resampling + relab)
     if (reg == "unloading" && unload == "hold") return "hold_unloading";
 
+    // HOLD tahap re-unloading
+    if (reg == "qc_reunloading" && unload == "hold") return "hold_reunloading";
+
     // HOLD tahap resampling (baru mulai resampling)
     if (reg == "qc_resampling" && unload == "hold") return "hold_resampling";
 
     if (reg == "qc_resampling") return "qc_resampling";
+    if (reg == "qc_reunloading") return "qc_reunloading";
+    if (reg == "random_check") return "pending_manager_approval";
     if (reg == "wb_out") return "done";
     if (unload == "approved") return "done";
 
@@ -49,10 +54,16 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
     switch (status) {
       case "hold_unloading":
         return "HOLD (UNLOADING)";
+      case "hold_reunloading":
+        return "HOLD (RE-UNLOADING)";
       case "hold_resampling":
         return "HOLD (RESAMPLING)";
       case "qc_resampling":
         return "RESAMPLING";
+      case "qc_reunloading":
+        return "RE-UNLOADING";
+      case "pending_manager_approval":
+        return "Pending Manager Approval";
       case "done":
         return "DONE";
       default:
@@ -64,10 +75,16 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
     switch (status) {
       case "hold_unloading":
         return Colors.orange;
+      case "hold_reunloading":
+        return Colors.orange;
       case "hold_resampling":
         return Colors.deepPurple;
       case "qc_resampling":
         return Colors.blue;
+      case "qc_reunloading":
+        return Colors.blue;
+      case "pending_manager_approval":
+        return Colors.yellow.shade700;
       case "done":
         return Colors.green;
       default:
@@ -79,10 +96,16 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
     switch (status) {
       case "hold_unloading":
         return Icons.pause_circle_outline;
+      case "hold_reunloading":
+        return Icons.pause_circle_outline;
       case "hold_resampling":
         return Icons.repeat;
       case "qc_resampling":
         return Icons.refresh;
+      case "qc_reunloading":
+        return Icons.refresh;
+      case "pending_manager_approval":
+        return Icons.error_outline;
       case "done":
         return Icons.check_circle_outline;
       default:
@@ -145,8 +168,11 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
           final unloadingTrucks = trucks.where((e) {
             final status = normalizedStatus(e.registStatus, e.unloadingStatus);
             return status == "qc_resampling" ||
+                status == "qc_reunloading" ||
                 status == "hold_unloading" ||
+                status == "hold_reunloading" ||
                 status == "hold_resampling" ||
+                status == "pending_manager_approval" ||
                 status == "done";
           }).toList();
 
@@ -171,8 +197,10 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
               return GestureDetector(
                 onTap: () {
                   if (status == "hold_unloading" ||
+                      status == "hold_reunloading" ||
                       status == "hold_resampling" ||
-                      status == "qc_resampling") {
+                      status == "qc_resampling" ||
+                      status == "qc_reunloading") {
                     _openEditPage(t, index);
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(

@@ -13,11 +13,7 @@ class SampleQCPKPage extends StatefulWidget {
   final String userId;
   final String token;
 
-  const SampleQCPKPage({
-    super.key,
-    required this.userId,
-    required this.token,
-  });
+  const SampleQCPKPage({super.key, required this.userId, required this.token});
 
   @override
   State<SampleQCPKPage> createState() => _SampleQCPKPageState();
@@ -48,8 +44,7 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
           tickets = data.map((e) => Map<String, dynamic>.from(e)).toList();
         });
       }
-    } catch (_) {
-    }
+    } catch (_) {}
   }
 
   Future<void> saveTicketsCache() async {
@@ -69,13 +64,20 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
       final token = await getToken();
       final res = await api.getQcSamplingPkVehicles("Bearer $token");
 
-      final List<QcSamplingPkVehicle> vehicles = res.data ?? <QcSamplingPkVehicle>[];
+      final List<QcSamplingPkVehicle> vehicles =
+          res.data ?? <QcSamplingPkVehicle>[];
 
-      final list = vehicles
-          .where((e) => e.has_sampling_data == true)
-          .map((e) {
-        final bool resampling = e.is_resampling == true;
-        final String status = resampling ? "RE-SAMPLING" : "DONE";
+      final list = vehicles.where((e) => e.has_sampling_data == true).map((e) {
+        final bool isResampling = e.is_resampling == true;
+        final String registStatus = (e.regist_status).toLowerCase().trim();
+        final bool needsResamplingCreate =
+            !isResampling && registStatus.startsWith("qc_resampling");
+
+        final String status = needsResamplingCreate
+            ? "RE-SAMPLING"
+            : (registStatus == "random_check"
+                  ? "PENDING_MANAGER_APPROVAL"
+                  : "DONE");
 
         return {
           "registration_id": e.registration_id,
@@ -85,7 +87,7 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
           "vendor_name": e.vendor_name,
           "commodity_code": e.commodity_code,
           "commodity_name": e.commodity_name,
-          "is_resampling": resampling,
+          "is_resampling": isResampling,
           "status": status,
         };
       }).toList();
@@ -100,9 +102,9 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
       await saveTicketsCache();
     } catch (e) {
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error fetch: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error fetch: $e")));
       await loadCachedTickets();
     }
   }
@@ -111,6 +113,9 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
     final status = item["status"] as String? ?? "";
     if (status == "RE-SAMPLING") {
       return Colors.red;
+    }
+    if (status == "PENDING_MANAGER_APPROVAL") {
+      return Colors.yellow.shade700;
     }
     return Colors.green;
   }
@@ -124,7 +129,18 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
     if (status == "RE-SAMPLING") {
       return Icons.warning_amber_rounded;
     }
+    if (status == "PENDING_MANAGER_APPROVAL") {
+      return Icons.error_outline;
+    }
     return Icons.check_circle_outline;
+  }
+
+  String _getStatusLabel(Map item) {
+    final status = item["status"] as String? ?? "";
+    if (status == "PENDING_MANAGER_APPROVAL") {
+      return "Pending Manager Approval";
+    }
+    return status;
   }
 
   @override
@@ -134,134 +150,128 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
         title: const Text("Dashboard Sampling PK"),
         backgroundColor: Colors.blue,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: fetchTickets,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: fetchTickets),
         ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : tickets.isEmpty
-              ? const Center(
-                  child: Text(
-                    "Belum ada kendaraan PK yang sudah sample.",
-                    style: TextStyle(color: Colors.black54, fontSize: 16),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: fetchTickets,
-                  child: ListView.builder(
-                    itemCount: tickets.length,
-                    itemBuilder: (_, i) {
-                      final item = tickets[i];
+          ? const Center(
+              child: Text(
+                "Belum ada kendaraan PK yang sudah sample.",
+                style: TextStyle(color: Colors.black54, fontSize: 16),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: fetchTickets,
+              child: ListView.builder(
+                itemCount: tickets.length,
+                itemBuilder: (_, i) {
+                  final item = tickets[i];
 
-                      return InkWell(
-                        onTap: () {
-                          // Hanya tiket yang statusnya RE-SAMPLING yang boleh dibuka untuk re-sample
-                          if (item["status"] == "RE-SAMPLING") {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => AddPKDataPage(
-                                  userId: widget.userId,
-                                  token: widget.token,
-                                  registrationId: item["registration_id"],
-                                  platKendaraan: item["plat"],
-                                  tiketNo: item["tiket_no"],
-                                  vendorCode: item["vendor_code"] ?? "-",
-                                  vendorName: item["vendor_name"] ?? "-",
-                                  commodityCode: item["commodity_code"] ?? "-",
-                                  commodityName: item["commodity_name"] ?? "-",
-                                ),
-                              ),
-                            ).then((value) {
-                              if (value == true) {
-                                fetchTickets();
-                              }
-                            });
+                  return InkWell(
+                    onTap: () {
+                      // Hanya tiket yang statusnya RE-SAMPLING yang boleh dibuka untuk re-sample
+                      if (item["status"] == "RE-SAMPLING") {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AddPKDataPage(
+                              userId: widget.userId,
+                              token: widget.token,
+                              registrationId: item["registration_id"],
+                              platKendaraan: item["plat"],
+                              tiketNo: item["tiket_no"],
+                              vendorCode: item["vendor_code"] ?? "-",
+                              vendorName: item["vendor_name"] ?? "-",
+                              commodityCode: item["commodity_code"] ?? "-",
+                              commodityName: item["commodity_name"] ?? "-",
+                            ),
+                          ),
+                        ).then((value) {
+                          if (value == true) {
+                            fetchTickets();
                           }
-                        },
-                        child: Card(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        });
+                      }
+                    },
+                    child: Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Nomor Tiket Timbang : ${item["tiket_no"]}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  "Nomor Tiket Timbang : ${item["tiket_no"]}",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
+                                  item["plat"] ?? "-",
+                                  style: const TextStyle(fontSize: 15),
                                 ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      item["plat"] ?? "-",
-                                      style: const TextStyle(fontSize: 15),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _getStatusBg(item),
+                                    border: Border.all(
+                                      color: _getStatusColor(item),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 5,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _getStatusIcon(item),
+                                        size: 16,
+                                        color: _getStatusColor(item),
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: _getStatusBg(item),
-                                        border: Border.all(
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _getStatusLabel(item),
+                                        style: TextStyle(
                                           color: _getStatusColor(item),
+                                          fontWeight: FontWeight.bold,
                                         ),
-                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            _getStatusIcon(item),
-                                            size: 16,
-                                            color: _getStatusColor(item),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            item["status"],
-                                            style: TextStyle(
-                                              color: _getStatusColor(item),
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
+                          ],
                         ),
-                      );
-                    },
-                  ),
-                ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.blue,
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => AddSampleQCPKPage(
-                userId: widget.userId,
-                token: widget.token,
-              ),
+              builder: (_) =>
+                  AddSampleQCPKPage(userId: widget.userId, token: widget.token),
             ),
           ).then((value) {
             if (value == true) {

@@ -15,10 +15,7 @@ import 'package:flutter_vcf/models/pk/response/qc_lab_pk_vehicles_response.dart'
 class InputLabPKPage extends StatefulWidget {
   final QcLabPkVehicle model;
 
-  const InputLabPKPage({
-    super.key,
-    required this.model,
-  });
+  const InputLabPKPage({super.key, required this.model});
 
   @override
   State<InputLabPKPage> createState() => _InputLabPKPageState();
@@ -53,11 +50,13 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
 
   final ImagePicker picker = ImagePicker();
   int get _currentSamplingCounter => widget.model.counter ?? 0;
-  bool get _isRelab => widget.model.isRelab == true;
+  bool get _isRelab {
+    final regist = (widget.model.registStatus ?? '').toLowerCase().trim();
+    return widget.model.isRelab == true || regist.startsWith('qc_relab');
+  }
+
   bool get _isHoldRelab => isHoldCase && (widget.model.counter ?? 0) > 0;
   bool get _isHoldInitial => isHoldCase && (widget.model.counter ?? 0) == 0;
-
-
 
   // max 4 foto
   int _getMaxPhotoAllowed() => 4;
@@ -81,11 +80,10 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
     debugPrint("isHoldCase: $isHoldCase");
     debugPrint("=============================");
 
-  //  if (isHoldCase) {
-  //     _forceNotRelab = true;   
-  //     isQcEnabled = true;     
-  //   }
-
+    //  if (isHoldCase) {
+    //     _forceNotRelab = true;
+    //     isQcEnabled = true;
+    //   }
 
     if (_isRelab || isHoldCase) {
       _loadLabPkDetail();
@@ -93,7 +91,6 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
       _isDetailLoaded = true;
     }
   }
-
 
   @override
   void dispose() {
@@ -107,12 +104,13 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
 
   String _derivePkStatus(QcLabPkVehicle v) {
     final lab = (v.labStatus ?? "").toLowerCase();
+    final regist = (v.registStatus ?? '').toLowerCase().trim();
 
     if (["approved", "hold", "rejected"].contains(lab)) {
       return lab;
     }
 
-    if (v.isRelab == true) {
+    if (v.isRelab == true || regist.startsWith('qc_relab')) {
       if (v.counter == 1) return "resampling_1";
       if (v.counter == 2) return "resampling_2";
     }
@@ -130,9 +128,9 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
 
     final status = await Permission.camera.request();
     if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Izin kamera diperlukan")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Izin kamera diperlukan")));
       return;
     }
 
@@ -142,10 +140,18 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
 
       setState(() {
         switch (index) {
-          case 1: _image1 = file; break;
-          case 2: _image2 = file; break;
-          case 3: _image3 = file; break;
-          case 4: _image4 = file; break;
+          case 1:
+            _image1 = file;
+            break;
+          case 2:
+            _image2 = file;
+            break;
+          case 3:
+            _image3 = file;
+            break;
+          case 4:
+            _image4 = file;
+            break;
         }
       });
     }
@@ -184,29 +190,29 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
             _labRecords = sorted;
             _isDetailLoaded = true;
 
-           if (isHoldCase) {
-            final currentCounter = _currentSamplingCounter;
+            if (isHoldCase) {
+              final currentCounter = _currentSamplingCounter;
 
-            final activeRecord = sorted.firstWhere(
-              (e) => (e.counter ?? 0) == currentCounter,
-              orElse: () => sorted.last,
-            );
+              final activeRecord = sorted.firstWhere(
+                (e) => (e.counter ?? 0) == currentCounter,
+                orElse: () => sorted.last,
+              );
 
-            ffaCtrl.text = activeRecord.ffa ?? "";
-            moistCtrl.text = activeRecord.moisture ?? "";
-            dirtCtrl.text = activeRecord.dirt ?? "";
-            oilCtrl.text = activeRecord.oilContent ?? "";
-            remarksCtrl.text = activeRecord.remarks ?? "";
+              ffaCtrl.text = activeRecord.ffa ?? "";
+              moistCtrl.text = activeRecord.moisture ?? "";
+              dirtCtrl.text = activeRecord.dirt ?? "";
+              oilCtrl.text = activeRecord.oilContent ?? "";
+              remarksCtrl.text = activeRecord.remarks ?? "";
 
-            oldPhotos = activeRecord.photos
-                    ?.map((p) => p.url ?? "")
-                    .where((u) => u.isNotEmpty)
-                    .toList() ??
-                [];
+              oldPhotos =
+                  activeRecord.photos
+                      ?.map((p) => p.url ?? "")
+                      .where((u) => u.isNotEmpty)
+                      .toList() ??
+                  [];
 
-            isQcEnabled = true;
-          }
-
+              isQcEnabled = true;
+            }
           });
         } else {
           setState(() => _isDetailLoaded = true);
@@ -219,7 +225,7 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
       setState(() => _isDetailLoaded = true);
     }
   }
-  
+
   Future<void> _reloadOldPhotos() async {
     if (_isReloadingPhotos) return;
     setState(() => _isReloadingPhotos = true);
@@ -230,13 +236,14 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
       );
     } catch (e) {
       debugPrint('Reload old photos error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memuat ulang gambar: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal memuat ulang gambar: $e')));
     } finally {
       if (mounted) setState(() => _isReloadingPhotos = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
@@ -282,69 +289,68 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
     );
   }
 
+  Widget _buildRelabHoldSection() {
+    final current = _currentSamplingCounter;
 
- Widget _buildRelabHoldSection() {
-  final current = _currentSamplingCounter;
+    // Semua yang lama → readonly
+    final readonlyRecords =
+        _labRecords.where((rec) {
+          return (rec.counter ?? 0) < current;
+        }).toList()..sort(
+          (a, b) =>
+              ((a.counter ?? 0) as int).compareTo((b.counter ?? 0) as int),
+        );
 
-  // Semua yang lama → readonly
-  final readonlyRecords = _labRecords.where((rec) {
-    return (rec.counter ?? 0) < current;
-  }).toList()
-    ..sort((a, b) =>
-        ((a.counter ?? 0) as int).compareTo((b.counter ?? 0) as int));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // LAB AWAL + RE-LAB 1 (READONLY)
+        for (var rec in readonlyRecords) _labReadonlyCard(rec),
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      // LAB AWAL + RE-LAB 1 (READONLY)
-      for (var rec in readonlyRecords) _labReadonlyCard(rec),
+        const SizedBox(height: 12),
 
-      const SizedBox(height: 12),
+        _relabInputCard(current),
 
-
-      _relabInputCard(current),
-
-      const SizedBox(height: 20),
-      _buildActionButtons(),
-    ],
-  );
-}
-Widget _buildLabSection() {
-  // HOLD LAB AWAL (counter 0)
-  if (_isHoldInitial) {
-    return _buildHoldSection();
+        const SizedBox(height: 20),
+        _buildActionButtons(),
+      ],
+    );
   }
 
-  // HOLD RE-LAB (counter 1 atau 2)
-  if (_isHoldRelab) {
-    return _buildRelabHoldSection();
-  }
+  Widget _buildLabSection() {
+    // HOLD LAB AWAL (counter 0)
+    if (_isHoldInitial) {
+      return _buildHoldSection();
+    }
 
-  // RELAB NORMAL
-  if (_isRelab) {
-    return _buildRelabSection();
-  }
+    // HOLD RE-LAB (counter 1 atau 2)
+    if (_isHoldRelab) {
+      return _buildRelabHoldSection();
+    }
 
-  // NORMAL
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Padding(
-        padding: EdgeInsets.symmetric(vertical: 6),
-        child: Text(
-          "Input QC Data",
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+    // RELAB NORMAL
+    if (_isRelab) {
+      return _buildRelabSection();
+    }
+
+    // NORMAL
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 6),
+          child: Text(
+            "Input QC Data",
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+          ),
         ),
-      ),
-      _inputFormFields(),
-      _cameraSection(),
-      const SizedBox(height: 20),
-      _buildActionButtons(),
-    ],
-  );
-}
-
-
+        _inputFormFields(),
+        _cameraSection(),
+        const SizedBox(height: 20),
+        _buildActionButtons(),
+      ],
+    );
+  }
 
   Widget _buildHoldSection() {
     final int counter = widget.model.counter ?? 0;
@@ -352,7 +358,6 @@ Widget _buildLabSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-
         // Jika sedang HOLD RELAB → tampilkan hasil awal (counter 0)
         if (counter >= 1)
           for (var rec in _labRecords.where((e) => (e.counter ?? 0) == 0))
@@ -378,194 +383,190 @@ Widget _buildLabSection() {
     );
   }
 
+  Widget _buildRelabSection() {
+    final current = _currentSamplingCounter;
 
+    final previousRecords =
+        _labRecords.where((rec) {
+          return (rec.counter ?? 0) < current;
+        }).toList()..sort((a, b) {
+          return ((a.counter ?? 0) as int).compareTo((b.counter ?? 0) as int);
+        });
 
-Widget _buildRelabSection() {
-  final current = _currentSamplingCounter;
-
-  final previousRecords = _labRecords.where((rec) {
-    return (rec.counter ?? 0) < current;
-  }).toList()
-    ..sort((a, b) {
-      return ((a.counter ?? 0) as int).compareTo((b.counter ?? 0) as int);
-    });
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      for (var rec in previousRecords) _labReadonlyCard(rec),
-      const SizedBox(height: 12),
-      _relabInputCard(current),
-      const SizedBox(height: 20),
-      _buildActionButtons(),
-    ],
-  );
-}
-
-
-  Widget _inputFormFields() {
-  return Column(
-    children: [
-      /// Row 1 — FFA & Dirt
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10, right: 6),
-              child: _numberField("FFA (%)", ffaCtrl),
-            ),
-          ),
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10, left: 6),
-              child: _numberField("Dirt (%)", dirtCtrl),
-            ),
-          ),
-        ],
-      ),
-
-      /// Row 2 — Moisture & Oil Content
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10, right: 6),
-              child: _numberField("Moisture (%)", moistCtrl),
-            ),
-          ),
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10, left: 6),
-              child: _numberField("Oil Content (%)", oilCtrl),
-            ),
-          ),
-        ],
-      ),
-
-      /// Row 3 — Remarks (full width)
-      Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        child: _input("Remarks", remarksCtrl, maxLines: 2),
-      ),
-    ],
-  );
-}
-
-
- Widget _labReadonlyCard(dynamic record) {
-  final int counter = record.counter ?? 0;
-
-  String title = counter == 0 ? "Hasil Lab Awal" : "Hasil Re-Lab $counter";
-
-  final String ffa = record.ffa ?? "-";
-  final String moist = record.moisture ?? "-";
-  final String dirt = record.dirt ?? "-";
-  final String oil = record.oilContent ?? "-";
-  final String remarks = record.remarks ?? "";
-
-  final List<String> photoUrls =
-      (record.photos as List<dynamic>?)
-              ?.map((p) => p.url as String? ?? "")
-              .where((u) => u.isNotEmpty)
-              .toList() ??
-          [];
-
-  return Container(
-    width: double.infinity,
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Colors.grey.shade100,
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: Colors.black26),
-    ),
-    child: Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        for (var rec in previousRecords) _labReadonlyCard(rec),
         const SizedBox(height: 12),
+        _relabInputCard(current),
+        const SizedBox(height: 20),
+        _buildActionButtons(),
+      ],
+    );
+  }
 
-        /// ROW 1 — FFA & Dirt
+  Widget _inputFormFields() {
+    return Column(
+      children: [
+        /// Row 1 — FFA & Dirt
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _readonlyInputBox("FFA (%)", ffa)),
-            const SizedBox(width: 8),
-            Expanded(child: _readonlyInputBox("Dirt (%)", dirt)),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        /// ROW 2 — Moisture & Oil Content
-        Row(
-          children: [
-            Expanded(child: _readonlyInputBox("Moisture (%)", moist)),
-            const SizedBox(width: 8),
-            Expanded(child: _readonlyInputBox("Oil Content (%)", oil)),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        /// Remarks full width
-        _readonlyInputBox("Remarks", remarks),
-
-        const SizedBox(height: 12),
-
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text("Foto", style: TextStyle(fontWeight: FontWeight.w500)),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_isReloadingPhotos)
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  IconButton(
-                    tooltip: 'Reload gambar',
-                    icon: const Icon(Icons.refresh, size: 20),
-                    onPressed: () async {
-                      await _reloadOldPhotos();
-                    },
-                  ),
-              ],
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10, right: 6),
+                child: _numberField("FFA (%)", ffaCtrl),
+              ),
+            ),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10, left: 6),
+                child: _numberField("Dirt (%)", dirtCtrl),
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        _readonlyPhotoGrid(photoUrls),
-      ],
-    ),
-  );
-}
 
-Widget _readonlyInputBox(String label, String value) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-      const SizedBox(height: 4),
-      Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.black38),
+        /// Row 2 — Moisture & Oil Content
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10, right: 6),
+                child: _numberField("Moisture (%)", moistCtrl),
+              ),
+            ),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10, left: 6),
+                child: _numberField("Oil Content (%)", oilCtrl),
+              ),
+            ),
+          ],
         ),
-        child: Text(value),
+
+        /// Row 3 — Remarks (full width)
+        Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          child: _input("Remarks", remarksCtrl, maxLines: 2),
+        ),
+      ],
+    );
+  }
+
+  Widget _labReadonlyCard(dynamic record) {
+    final int counter = record.counter ?? 0;
+
+    String title = counter == 0 ? "Hasil Lab Awal" : "Hasil Re-Lab $counter";
+
+    final String ffa = record.ffa ?? "-";
+    final String moist = record.moisture ?? "-";
+    final String dirt = record.dirt ?? "-";
+    final String oil = record.oilContent ?? "-";
+    final String remarks = record.remarks ?? "";
+
+    final List<String> photoUrls =
+        (record.photos as List<dynamic>?)
+            ?.map((p) => p.url as String? ?? "")
+            .where((u) => u.isNotEmpty)
+            .toList() ??
+        [];
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.black26),
       ),
-    ],
-  );
-}
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
+          const SizedBox(height: 12),
 
+          /// ROW 1 — FFA & Dirt
+          Row(
+            children: [
+              Expanded(child: _readonlyInputBox("FFA (%)", ffa)),
+              const SizedBox(width: 8),
+              Expanded(child: _readonlyInputBox("Dirt (%)", dirt)),
+            ],
+          ),
+          const SizedBox(height: 8),
 
+          /// ROW 2 — Moisture & Oil Content
+          Row(
+            children: [
+              Expanded(child: _readonlyInputBox("Moisture (%)", moist)),
+              const SizedBox(width: 8),
+              Expanded(child: _readonlyInputBox("Oil Content (%)", oil)),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          /// Remarks full width
+          _readonlyInputBox("Remarks", remarks),
+
+          const SizedBox(height: 12),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Foto", style: TextStyle(fontWeight: FontWeight.w500)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_isReloadingPhotos)
+                    const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    IconButton(
+                      tooltip: 'Reload gambar',
+                      icon: const Icon(Icons.refresh, size: 20),
+                      onPressed: () async {
+                        await _reloadOldPhotos();
+                      },
+                    ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _readonlyPhotoGrid(photoUrls),
+        ],
+      ),
+    );
+  }
+
+  Widget _readonlyInputBox(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.black38),
+          ),
+          child: Text(value),
+        ),
+      ],
+    );
+  }
 
   Widget _readonlyPhotoGrid(List<String> photos) {
     return Row(
@@ -613,9 +614,10 @@ Widget _readonlyInputBox(String label, String value) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 14)),
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
           const SizedBox(height: 8),
 
           _inputFormFields(),
@@ -644,9 +646,7 @@ Widget _readonlyInputBox(String label, String value) {
             children: [
               const Text(
                 "Ambil Gambar Hasil Lab",
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w500),
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -703,29 +703,26 @@ Widget _readonlyInputBox(String label, String value) {
   }
 
   Widget _cameraBox(int i, File? f) => GestureDetector(
-        onTap: (isCameraEnabled && isQcEnabled) ? () => _getImage(i) : null,
-        child: AspectRatio(
-          aspectRatio: 3 / 4,
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(),
-              borderRadius: BorderRadius.circular(8),
-              color: (isCameraEnabled && isQcEnabled)
-                  ? Colors.white
-                  : Colors.grey.shade400,
-            ),
-            child: f == null
-                ? const Icon(Icons.camera_alt)
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      f,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-          ),
+    onTap: (isCameraEnabled && isQcEnabled) ? () => _getImage(i) : null,
+    child: AspectRatio(
+      aspectRatio: 3 / 4,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(),
+          borderRadius: BorderRadius.circular(8),
+          color: (isCameraEnabled && isQcEnabled)
+              ? Colors.white
+              : Colors.grey.shade400,
         ),
-      );
+        child: f == null
+            ? const Icon(Icons.camera_alt)
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(f, fit: BoxFit.cover),
+              ),
+      ),
+    ),
+  );
 
   Widget _buildActionButtons() {
     return Row(
@@ -759,7 +756,9 @@ Widget _readonlyInputBox(String label, String value) {
           dirtCtrl.text.isEmpty ||
           oilCtrl.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Data FFA, Moisture, Dirt & Oil Content kosong")),
+          const SnackBar(
+            content: Text("Data FFA, Moisture, Dirt & Oil Content kosong"),
+          ),
         );
         return false;
       }
@@ -798,9 +797,9 @@ Widget _readonlyInputBox(String label, String value) {
     try {
       final token = await _getToken();
       if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Token tidak ditemukan.")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Token tidak ditemukan.")));
         return;
       }
 
@@ -837,7 +836,9 @@ Widget _readonlyInputBox(String label, String value) {
 
       if (res.success == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("QC Lab PK ${status.toUpperCase()} berhasil dikirim")),
+          SnackBar(
+            content: Text("QC Lab PK ${status.toUpperCase()} berhasil dikirim"),
+          ),
         );
 
         Navigator.pop(context, {
@@ -853,12 +854,14 @@ Widget _readonlyInputBox(String label, String value) {
       }
     } on DioException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: ${e.response?.data['message'] ?? e.message}")),
+        SnackBar(
+          content: Text("Error: ${e.response?.data['message'] ?? e.message}"),
+        ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -875,13 +878,17 @@ Widget _readonlyInputBox(String label, String value) {
         actions: [
           TextButton(
             style: TextButton.styleFrom(
-                backgroundColor: Colors.red, foregroundColor: Colors.white),
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(context),
             child: const Text("Tidak"),
           ),
           TextButton(
             style: TextButton.styleFrom(
-                backgroundColor: Colors.green, foregroundColor: Colors.white),
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               Navigator.pop(context);
               _submit(status);
@@ -892,7 +899,6 @@ Widget _readonlyInputBox(String label, String value) {
       ),
     );
   }
-
 
   Widget _readonlyRow(String label, String value) {
     return Padding(
@@ -908,24 +914,24 @@ Widget _readonlyInputBox(String label, String value) {
   }
 
   Widget _readonlyBox(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                border: Border.all(color: Colors.black54),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(value),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            border: Border.all(color: Colors.black54),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(value),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _oldPhotoGallery() {
     if (oldPhotos.isEmpty) return const SizedBox();
@@ -936,8 +942,10 @@ Widget _readonlyInputBox(String label, String value) {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Foto Sebelumnya (Readonly)",
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              "Foto Sebelumnya (Readonly)",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -999,7 +1007,6 @@ Widget _readonlyInputBox(String label, String value) {
     );
   }
 
- 
   Widget _plateWidget(String plate) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1017,7 +1024,6 @@ Widget _readonlyInputBox(String label, String value) {
     );
   }
 
- 
   Widget _input(String label, TextEditingController c, {int maxLines = 1}) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -1029,10 +1035,11 @@ Widget _readonlyInputBox(String label, String value) {
           labelText: label,
           filled: true,
           fillColor: isQcEnabled ? Colors.white : Colors.grey.shade300,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 14,
           ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
     );
@@ -1052,17 +1059,22 @@ Widget _readonlyInputBox(String label, String value) {
           labelText: label,
           filled: true,
           fillColor: isQcEnabled ? Colors.white : Colors.grey.shade300,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 14,
           ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
     );
   }
 
-  Widget _btn(String label, Color color, VoidCallback onPressed,
-      {bool disabled = false}) {
+  Widget _btn(
+    String label,
+    Color color,
+    VoidCallback onPressed, {
+    bool disabled = false,
+  }) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: disabled ? Colors.grey : color,

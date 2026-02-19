@@ -152,7 +152,8 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
         if (unloadingStatus == "hold" && regStatus == "qc_resampling") {
           pageMode = 'hold_resampling';
           disableHoldButton = true;
-        } else if (unloadingStatus == "hold" && regStatus == "unloading") {
+        } else if (unloadingStatus == "hold" &&
+            (regStatus == "unloading" || regStatus == "qc_reunloading")) {
           pageMode = 'hold_unloading';
           disableHoldButton = false;
         } else {
