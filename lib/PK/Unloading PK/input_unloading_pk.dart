@@ -174,19 +174,33 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
 
   Future<int> _countSamplingData() async {
     try {
-      final res = await api.getQcSamplingPkSample(
-        "Bearer ${widget.token}",
-        widget.model.registrationId ?? "",
-      );
-      final d = res.data;
+      final registrationId = widget.model.registrationId ?? "";
+      if (registrationId.isEmpty) return 0;
 
-      return d?.sampling_records.length ?? 0;
+      final res = await _dio.get(
+        "/qc/sampling/pk/$registrationId",
+        options: Options(
+          headers: {"Authorization": "Bearer ${widget.token}"},
+        ),
+      );
+
+      final body = res.data;
+      if (body is! Map<String, dynamic>) return 0;
+
+      final data = body["data"];
+      if (data is! Map<String, dynamic>) return 0;
+
+      final records = data["sampling_records"];
+      if (records is List) return records.length;
+
+      final samplingCount = data["sampling_count"];
+      if (samplingCount is num) return samplingCount.toInt();
+      if (samplingCount is String) return int.tryParse(samplingCount) ?? 0;
+
+      return 0;
     } catch (e) {
-      if (!mounted) return 0;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error Count Sampling Data: $e")));
-      return 0; // Add this return statement
+      debugPrint("Error Count Sampling Data: $e");
+      return 0;
     }
   }
 
