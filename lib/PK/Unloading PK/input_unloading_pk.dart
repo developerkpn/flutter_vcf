@@ -95,6 +95,9 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
         widget.model.registrationId ?? "",
       );
       final d = res.data;
+
+      final samplingCount = await _countSamplingData();
+
       if (!mounted) return;
 
       if (d == null) {
@@ -155,10 +158,10 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
         } else if (unloadingStatus == "hold" &&
             (regStatus == "unloading" || regStatus == "qc_reunloading")) {
           pageMode = 'hold_unloading';
-          disableHoldButton = false;
+          disableHoldButton = samplingCount > 2;
         } else {
           pageMode = 'normal';
-          disableHoldButton = false;
+         disableHoldButton = samplingCount > 2;
         }
       });
     } catch (e) {
@@ -166,6 +169,24 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error load detail unloading: $e")),
       );
+    }
+  }
+
+  Future<int> _countSamplingData() async {
+    try {
+      final res = await api.getQcSamplingPkSample(
+        "Bearer ${widget.token}",
+        widget.model.registrationId ?? "",
+      );
+      final d = res.data;
+
+      return d?.sampling_records.length ?? 0;
+    } catch (e) {
+      if (!mounted) return 0;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error Count Sampling Data: $e")));
+      return 0; // Add this return statement
     }
   }
 
@@ -330,9 +351,15 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     setState(() => _isReloadingExisting = true);
     try {
       await _loadExistingUnloading();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gambar berhasil dimuat ulang')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gambar berhasil dimuat ulang')),
+        );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memuat ulang gambar: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat ulang gambar: $e')),
+        );
     } finally {
       if (mounted) setState(() => _isReloadingExisting = false);
     }
@@ -599,14 +626,15 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
                           showDialog(
                             context: context,
                             builder: (_) => Dialog(
-                                child: InteractiveViewer(
-                                  child: Image.network(
-                                    url,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
-                                  ),
+                              child: InteractiveViewer(
+                                child: Image.network(
+                                  url,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (c, e, s) =>
+                                      const Icon(Icons.broken_image),
                                 ),
                               ),
+                            ),
                           );
                         },
                         child: _initialPhotoThumb(url),
