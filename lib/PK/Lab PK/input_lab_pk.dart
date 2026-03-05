@@ -575,25 +575,33 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
         final url = hasPhoto ? photos[i] : null;
 
         return Expanded(
-          child: Container(
-            height: 75,
-            margin: EdgeInsets.only(right: i < 3 ? 6 : 0),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.black38),
+          child: Padding(
+            padding: EdgeInsets.only(right: i < 3 ? 6 : 0),
+            child: AspectRatio(
+              aspectRatio: 3 / 4,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.black38),
+                ),
+                child: url == null
+                    ? const Icon(Icons.image_not_supported)
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          color: Colors.white,
+                          alignment: Alignment.center,
+                          child: Image.network(
+                            url,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.broken_image),
+                          ),
+                        ),
+                      ),
+              ),
             ),
-            child: url == null
-                ? const Icon(Icons.image_not_supported)
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.network(
-                      url,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.broken_image),
-                    ),
-                  ),
           ),
         );
       }),
@@ -976,27 +984,35 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
             final url = has ? oldPhotos[i] : null;
 
             return Expanded(
-              child: Container(
-                height: 75,
-                margin: EdgeInsets.only(right: i < 3 ? 6 : 0),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.black54),
-                  color: Colors.grey.shade300,
+              child: Padding(
+                padding: EdgeInsets.only(right: i < 3 ? 6 : 0),
+                child: AspectRatio(
+                  aspectRatio: 3 / 4,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.black54),
+                      color: Colors.grey.shade300,
+                    ),
+                    child: url == null
+                        ? const Icon(Icons.image_not_supported)
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              color: Colors.white,
+                              alignment: Alignment.center,
+                              child: Image.network(
+                                url,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  debugPrint('Old image load error: $error');
+                                  return const Icon(Icons.broken_image);
+                                },
+                              ),
+                            ),
+                          ),
+                  ),
                 ),
-                child: url == null
-                    ? const Icon(Icons.image_not_supported)
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          url,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            debugPrint('Old image load error: $error');
-                            return const Icon(Icons.broken_image);
-                          },
-                        ),
-                      ),
               ),
             );
           }),
