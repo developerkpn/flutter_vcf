@@ -57,6 +57,46 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
     return prefs.getString('jwt_token') ?? widget.token;
   }
 
+  Future<int> _resolveResamplingCounter({
+    required String token,
+    required QcSamplingPkVehicle vehicle,
+    required bool needsResamplingCreate,
+  }) async {
+    final int fallbackLastCounter = vehicle.counter ?? 0;
+
+    if (!needsResamplingCreate) {
+      return fallbackLastCounter.clamp(1, 2);
+    }
+
+    try {
+      final detail = await api.getQcSamplingPkSample(
+        "Bearer $token",
+        vehicle.registration_id,
+      );
+
+      final records = detail.data?.sampling_records ?? [];
+
+      final pendingRecords =
+          records.where((r) => r.sampled_at == null).toList()
+            ..sort((a, b) => a.counter.compareTo(b.counter));
+
+      if (pendingRecords.isNotEmpty) {
+        return pendingRecords.first.counter.clamp(1, 2);
+      }
+
+      int maxCounter = 0;
+      for (final r in records) {
+        if (r.counter > maxCounter) {
+          maxCounter = r.counter;
+        }
+      }
+
+      return (maxCounter + 1).clamp(1, 2);
+    } catch (_) {
+      return (fallbackLastCounter + 1).clamp(1, 2);
+    }
+  }
+
   Future<void> fetchTickets() async {
     setState(() => isLoading = true);
 
@@ -67,14 +107,23 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
       final List<QcSamplingPkVehicle> vehicles =
           res.data ?? <QcSamplingPkVehicle>[];
 
-      final list = vehicles.where((e) => e.has_sampling_data == true).map((e) {
+      final filtered =
+          vehicles.where((e) => e.has_sampling_data == true).toList();
+
+      final list = await Future.wait(filtered.map((e) async {
         final bool isResampling = e.is_resampling == true;
         final String registStatus = (e.regist_status).toLowerCase().trim();
         final bool needsResamplingCreate =
             !isResampling && registStatus.startsWith("qc_resampling");
 
+        final int resamplingCounter = await _resolveResamplingCounter(
+          token: token ?? '',
+          vehicle: e,
+          needsResamplingCreate: needsResamplingCreate,
+        );
+
         final String status = needsResamplingCreate
-            ? "RE-SAMPLING"
+            ? (resamplingCounter == 2 ? "resampling_2" : "resampling_1")
             : (registStatus == "random_check"
                   ? "PENDING_MANAGER_APPROVAL"
                   : "DONE");
@@ -88,9 +137,10 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
           "commodity_code": e.commodity_code,
           "commodity_name": e.commodity_name,
           "is_resampling": isResampling,
+          "resampling_counter": resamplingCounter,
           "status": status,
         };
-      }).toList();
+      }));
 
       setState(() {
         tickets = list.cast<Map<String, dynamic>>();
@@ -109,10 +159,16 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
     }
   }
 
+  bool _isResamplingStatus(String status) {
+    return status == "resampling_1" ||
+        status == "resampling_2" ||
+        status == "RE-SAMPLING";
+  }
+
   Color _getStatusColor(Map item) {
     final status = item["status"] as String? ?? "";
-    if (status == "RE-SAMPLING") {
-      return Colors.red;
+    if (_isResamplingStatus(status)) {
+      return Colors.purple;
     }
     if (status == "PENDING_MANAGER_APPROVAL") {
       return Colors.yellow.shade700;
@@ -126,8 +182,11 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
 
   IconData _getStatusIcon(Map item) {
     final status = item["status"] as String? ?? "";
-    if (status == "RE-SAMPLING") {
-      return Icons.warning_amber_rounded;
+    if (status == "resampling_2") {
+      return Icons.loop;
+    }
+    if (status == "resampling_1" || status == "RE-SAMPLING") {
+      return Icons.refresh;
     }
     if (status == "PENDING_MANAGER_APPROVAL") {
       return Icons.error_outline;
@@ -137,6 +196,12 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
 
   String _getStatusLabel(Map item) {
     final status = item["status"] as String? ?? "";
+    if (status == "resampling_2") {
+      return "RE-SAMPLING 2";
+    }
+    if (status == "resampling_1" || status == "RE-SAMPLING") {
+      return "RE-SAMPLING 1";
+    }
     if (status == "PENDING_MANAGER_APPROVAL") {
       return "Pending Manager Approval";
     }
@@ -172,7 +237,7 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
                   return InkWell(
                     onTap: () {
                       // Hanya tiket yang statusnya RE-SAMPLING yang boleh dibuka untuk re-sample
-                      if (item["status"] == "RE-SAMPLING") {
+                      if (_isResamplingStatus(item["status"] as String? ?? "")) {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
