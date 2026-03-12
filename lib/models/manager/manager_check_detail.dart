@@ -15,8 +15,11 @@ class ManagerCheckDetail {
   final String? requested_stage;
   final String? current_stage;
   final Map<String, dynamic>? sampling_data;
+  final List<Map<String, dynamic>>? sampling_records;
   final Map<String, dynamic>? lab_data;
+  final List<Map<String, dynamic>>? lab_records;
   final Map<String, dynamic>? unloading_data;
+  final List<Map<String, dynamic>>? pk_cycle_records;
   final List<ManagerCheck>? manager_checks;
 
   ManagerCheckDetail({
@@ -30,8 +33,11 @@ class ManagerCheckDetail {
     this.requested_stage,
     this.current_stage,
     this.sampling_data,
+    this.sampling_records,
     this.lab_data,
+    this.lab_records,
     this.unloading_data,
+    this.pk_cycle_records,
     this.manager_checks,
   });
 

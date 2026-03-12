@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import '../../../login.dart';
@@ -164,6 +165,27 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
         stage: "unloading",
       );
 
+      final samplingRandomTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: token,
+        stage: 'sampling',
+        tickets: samplingTickets.data ?? [],
+      );
+
+      final labRandomTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: token,
+        stage: 'lab',
+        tickets: labTickets.data ?? [],
+      );
+
+      final unloadingRandomTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: token,
+        stage: 'unloading',
+        tickets: unloadingTickets.data ?? [],
+      );
+
       setState(() {
         totalSampleKeluar = sampleRes.data?.statistics?.total_truk_keluar ?? 0;
         totalLabKeluar = labRes.data?.statistics?.total_truk_keluar ?? 0;
@@ -180,21 +202,9 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
           unloadingApprovedChecks = unloading?.approved ?? 0;
         }
 
-        samplingPendingChecks =
-            samplingTickets.data
-                ?.where((t) => !(t.has_manager_check ?? false))
-                .length ??
-            0;
-        labPendingChecks =
-            labTickets.data
-                ?.where((t) => !(t.has_manager_check ?? false))
-                .length ??
-            0;
-        unloadingPendingChecks =
-            unloadingTickets.data
-                ?.where((t) => !(t.has_manager_check ?? false))
-                .length ??
-            0;
+        samplingPendingChecks = samplingRandomTickets.length;
+        labPendingChecks = labRandomTickets.length;
+        unloadingPendingChecks = unloadingRandomTickets.length;
       });
     } catch (e) {
       print("ERROR LOAD STATISTICS PK: $e");
@@ -345,7 +355,7 @@ class _HomeManagerPkState extends State<HomeManagerPk> {
                 child: Column(
                   children: [
                     const Text(
-                      "QC Sample PK",
+                      "PK",
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,

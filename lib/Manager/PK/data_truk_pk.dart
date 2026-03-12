@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
+import '../rejected/manager_rejected_tickets_page.dart';
 import 'tiket/sp_tiket_manager_pk.dart';
 import 'tiket/lb_tiket_manager_pk.dart';
 import 'tiket/un_tiket_manager_pk.dart';
@@ -37,6 +39,9 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
   int sudahUnload = 0;
   int totalKeluarUnload = 0;
 
+  int labRejectedCount = 0;
+  int unloadRejectedCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +55,9 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
 
   Future<void> loadAllStatistics() async {
     try {
+      int nextLabRejectedCount = 0;
+      int nextUnloadRejectedCount = 0;
+
       final token = await _getToken();
       if (token == null) throw "Token tidak ditemukan";
 
@@ -86,6 +94,41 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
 
       final unload = unloadRes.data?.statistics;
 
+      try {
+        final labTicketsRes = await api.getManagerCheckTickets(
+          auth,
+          'PK',
+          stage: 'lab',
+        );
+        final labTickets = labTicketsRes.data ?? [];
+
+        final unloadingTicketsRes = await api.getManagerCheckTickets(
+          auth,
+          'PK',
+          stage: 'unloading',
+        );
+        final unloadingTickets = unloadingTicketsRes.data ?? [];
+
+        final labRejectedTickets = await filterRejectedOperatorTicketsByStage(
+          api: api,
+          authorizationToken: auth,
+          stage: 'lab',
+          tickets: labTickets,
+        );
+        nextLabRejectedCount = labRejectedTickets.length;
+
+        final unloadRejectedTickets =
+            await filterRejectedOperatorTicketsByStage(
+              api: api,
+              authorizationToken: auth,
+              stage: 'unloading',
+              tickets: unloadingTickets,
+            );
+        nextUnloadRejectedCount = unloadRejectedTickets.length;
+      } catch (_) {
+        // Keep dashboard stats visible even when rejected-count fetch fails.
+      }
+
       setState(() {
         // SAMPLE PK
         totalMasukSample = sample?.total_truk_masuk ?? 0;
@@ -105,6 +148,9 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
         sudahUnload = unload?.trukSudahUnloading ?? 0;
         totalKeluarUnload = unload?.totalTrukKeluar ?? 0;
 
+        labRejectedCount = nextLabRejectedCount;
+        unloadRejectedCount = nextUnloadRejectedCount;
+
         isLoading = false;
       });
     } catch (e) {
@@ -113,6 +159,11 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
         isLoading = false;
       });
     }
+  }
+
+  String _rejectedButtonText(int count) {
+    if (count <= 0) return 'Cek Rejected';
+    return 'Cek Rejected ($count)';
   }
 
   @override
@@ -130,7 +181,11 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
         ),
         title: const Text(
           "DASHBOARD QC PK",
-          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         actions: [
           IconButton(
@@ -143,98 +198,152 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
-              ? Center(child: Text(errorMessage!, style: const TextStyle(color: Colors.red)))
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      // QC SAMPLE PK
-                          _bigBox(
-                            icon: Icons.science,
-                            title: "QC Sample PK",
-                            items: [
-                              ["Total Truk Masuk", "$totalMasukSample"],
-                              ["Truk Belum Ambil Sample", "$belumSample"],
-                              ["Truk Sudah Ambil Sample", "$sudahSample"],
-                              ["Total Truk Keluar", "$totalKeluarSample"],
-                            ],
-                            buttonText: "Input Data Sample PK",
-                            onPressed: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              final token = prefs.getString("jwt_token") ?? prefs.getString("token") ?? "";
-
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => SpTiketManagerPKPage(
-                                    userId: "manager",
-                                    token: token,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-
-                      const SizedBox(height: 30),
-
-                      // QC LAB PK
-                          _bigBox(
-                            icon: Icons.biotech,
-                            title: "QC Lab PK",
-                            items: [
-                              ["Total Truk Masuk", "$totalMasukLab"],
-                              ["Truk Belum Cek LAB", "$belumLab"],
-                              ["Truk Sudah Cek LAB", "$sudahLab"],
-                              ["Total Truk Keluar", "$totalKeluarLab"],
-                            ],
-                            buttonText: "Input Data QC Lab PK",
-                            onPressed: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              final token = prefs.getString("jwt_token") ?? prefs.getString("token") ?? "";
-
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => LbTiketManagerPKPage(
-                                    userId: "manager",
-                                    token: token,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-
-                      const SizedBox(height: 30),
-
-                      // UNLOADING PK
-                          _bigBox(
-                            icon: Icons.local_shipping,
-                            title: "Unloading PK",
-                            items: [
-                              ["Total Truk Masuk", "$totalMasukUnload"],
-                              ["Truk Belum Unloading", "$belumUnload"],
-                              ["Truk Sudah Unloading", "$sudahUnload"],
-                              ["Total Truk Keluar", "$totalKeluarUnload"],
-                            ],
-                            buttonText: "Input Data Unloading PK",
-                            onPressed: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              final token = prefs.getString("jwt_token") ?? prefs.getString("token") ?? "";
-
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => UnTiketManagerPKPage(
-                                    userId: "manager",
-                                    token: token,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+          ? Center(
+              child: Text(
+                errorMessage!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  // QC SAMPLE PK
+                  _bigBox(
+                    icon: Icons.science,
+                    title: "QC Sample PK",
+                    items: [
+                      ["Total Truk Masuk", "$totalMasukSample"],
+                      ["Truk Belum Ambil Sample", "$belumSample"],
+                      ["Truk Sudah Ambil Sample", "$sudahSample"],
+                      ["Total Truk Keluar", "$totalKeluarSample"],
                     ],
+                    buttonText: "Input Sample PK",
+                    onPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      final token =
+                          prefs.getString("jwt_token") ??
+                          prefs.getString("token") ??
+                          "";
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SpTiketManagerPKPage(
+                            userId: "manager",
+                            token: token,
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                ),
+
+                  const SizedBox(height: 30),
+
+                  // QC LAB PK
+                  _bigBox(
+                    icon: Icons.biotech,
+                    title: "QC Lab PK",
+                    items: [
+                      ["Total Truk Masuk", "$totalMasukLab"],
+                      ["Truk Belum Cek LAB", "$belumLab"],
+                      ["Truk Sudah Cek LAB", "$sudahLab"],
+                      ["Total Truk Keluar", "$totalKeluarLab"],
+                    ],
+                    buttonText: "Input QC Lab PK",
+                    onPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      final token =
+                          prefs.getString("jwt_token") ??
+                          prefs.getString("token") ??
+                          "";
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LbTiketManagerPKPage(
+                            userId: "manager",
+                            token: token,
+                          ),
+                        ),
+                      );
+                    },
+                    secondaryButtonText: _rejectedButtonText(labRejectedCount),
+                    onSecondaryPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      final token =
+                          prefs.getString("jwt_token") ??
+                          prefs.getString("token") ??
+                          "";
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ManagerRejectedTicketsPage(
+                            commodity: "PK",
+                            stage: "lab",
+                            token: token,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  // UNLOADING PK
+                  _bigBox(
+                    icon: Icons.local_shipping,
+                    title: "Unloading PK",
+                    items: [
+                      ["Total Truk Masuk", "$totalMasukUnload"],
+                      ["Truk Belum Unloading", "$belumUnload"],
+                      ["Truk Sudah Unloading", "$sudahUnload"],
+                      ["Total Truk Keluar", "$totalKeluarUnload"],
+                    ],
+                    buttonText: "Input Unloading PK",
+                    onPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      final token =
+                          prefs.getString("jwt_token") ??
+                          prefs.getString("token") ??
+                          "";
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => UnTiketManagerPKPage(
+                            userId: "manager",
+                            token: token,
+                          ),
+                        ),
+                      );
+                    },
+                    secondaryButtonText: _rejectedButtonText(
+                      unloadRejectedCount,
+                    ),
+                    onSecondaryPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      final token =
+                          prefs.getString("jwt_token") ??
+                          prefs.getString("token") ??
+                          "";
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ManagerRejectedTicketsPage(
+                            commodity: "PK",
+                            stage: "unloading",
+                            token: token,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -245,6 +354,8 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
     required List<List<String>> items,
     required String buttonText,
     VoidCallback? onPressed,
+    String? secondaryButtonText,
+    VoidCallback? onSecondaryPressed,
   }) {
     return Container(
       width: double.infinity,
@@ -261,7 +372,13 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
             children: [
               Icon(icon, size: 26, color: Colors.black),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
 
@@ -271,23 +388,77 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
 
           const SizedBox(height: 10),
 
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[200],
-                foregroundColor: Colors.blue,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                elevation: 0,
-              ),
-              onPressed: onPressed,
-              child: Text(
-                buttonText,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          if (secondaryButtonText != null && onSecondaryPressed != null)
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[200],
+                      foregroundColor: Colors.blue,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: onPressed,
+                    child: Text(
+                      buttonText,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade50,
+                      foregroundColor: Colors.red.shade700,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: onSecondaryPressed,
+                    child: Text(
+                      secondaryButtonText,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey[200],
+                  foregroundColor: Colors.blue,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: onPressed,
+                child: Text(
+                  buttonText,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -296,10 +467,13 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
   Widget _dashboardBox({required String title, required String value}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(title),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-      ]),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 }

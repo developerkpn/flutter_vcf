@@ -37,15 +37,35 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
   // STATUS NORMALIZER POME
   // ============================
   /// Menyamakan semua status yang mungkin
-  String normalizedStatus(String? s) {
-    final v = (s ?? "").toLowerCase().trim();
+  String normalizedStatus(String? registStatus, String? unloadingStatus) {
+    final reg = (registStatus ?? "").toLowerCase().trim();
+    final unload = (unloadingStatus ?? "").toLowerCase().trim();
+    final hasRejectedStatus =
+        reg.contains("rejected") || unload.contains("rejected");
 
-    if (v == "hold" || v == "unloading_hold") return "unloading_hold";
-    if (v == "random_check") return "random_check";
-    if (v == "approved" || v == "wb_out") return "wb_out";
-    if (v == "rejected" || v == "unloading_rejected") return "rejected";
+    if (reg == "random_check") return "random_check";
 
-    return v;
+    if (reg.contains("cancel") || unload.contains("cancel")) {
+      return "cancel";
+    }
+
+    if (reg == "wb_out" || unload == "approved") return "wb_out";
+
+    if (hasRejectedStatus && reg == "wb_out") {
+      return "wb_out";
+    }
+
+    if (unload == "hold" ||
+        unload == "unloading_hold" ||
+        reg == "unloading_hold") {
+      return "unloading_hold";
+    }
+
+    if (hasRejectedStatus) {
+      return "rejected";
+    }
+
+    return unload.isNotEmpty ? unload : reg;
   }
 
   // ============================
@@ -59,6 +79,8 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
         return "APPROVED";
       case "random_check":
         return "Pending Manager Approval";
+      case "cancel":
+        return "CANCEL";
       case "rejected":
         return "REJECTED";
       default:
@@ -74,6 +96,7 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
         return Colors.green;
       case "random_check":
         return Colors.yellow.shade700;
+      case "cancel":
       case "rejected":
         return Colors.red;
       default:
@@ -89,6 +112,7 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
         return Icons.check_circle_outline;
       case "random_check":
         return Icons.error_outline;
+      case "cancel":
       case "rejected":
         return Icons.cancel_outlined;
       default:
@@ -139,7 +163,10 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
 
       body: FutureBuilder<UnloadingPOMEResponse>(
         future: _getToken().then(
-          (t) => apiService.getUnloadingPomeData("Bearer $t"),
+          (t) => apiService.getUnloadingPomeData(
+            "Bearer $t",
+            includeRejected: true,
+          ),
         ),
         builder: (context, snapshot) {
           // LOADING
@@ -160,14 +187,20 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
           // ==========================================
           final unloadingTrucks = trucks.where((e) {
             final status = normalizedStatus(
-              (e.unloading_status ?? "").isNotEmpty
-                  ? e.unloading_status
-                  : e.regist_status,
+              e.regist_status,
+              e.unloading_status,
             );
 
-            return status == "unloading_hold" ||
-                status == "wb_out" ||
-                status == "random_check";
+            if (status.isEmpty) return false;
+
+            // Keep unloading dashboard resilient to backend status variants.
+            if (status == "sampling" ||
+                status == "lab" ||
+                status == "unloading") {
+              return false;
+            }
+
+            return true;
           }).toList();
 
           if (unloadingTrucks.isEmpty) {
@@ -185,9 +218,8 @@ class _UnloadingPOMEPageState extends State<UnloadingPOMEPage> {
               final t = unloadingTrucks[index];
 
               final status = normalizedStatus(
-                (t.unloading_status ?? "").isNotEmpty
-                    ? t.unloading_status
-                    : t.regist_status,
+                t.regist_status,
+                t.unloading_status,
               );
 
               return GestureDetector(

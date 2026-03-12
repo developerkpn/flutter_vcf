@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
 import 'package:flutter_vcf/Manager/POME/tiket/lb_tiket_manager_pome.dart';
 import 'package:flutter_vcf/Manager/POME/tiket/sp_tiket_manager_pome.dart';
 import 'package:flutter_vcf/Manager/POME/tiket/un_tiket_manager_pome.dart';
@@ -143,6 +144,27 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
         stage: "unloading",
       );
 
+      final samplingRandomTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: token,
+        stage: 'sampling',
+        tickets: samplingTickets.data ?? [],
+      );
+
+      final labRandomTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: token,
+        stage: 'lab',
+        tickets: labTickets.data ?? [],
+      );
+
+      final unloadingRandomTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: token,
+        stage: 'unloading',
+        tickets: unloadingTickets.data ?? [],
+      );
+
       setState(() {
         totalSampleKeluar =
             sampleStats.data?.statistics?.totalTrukKeluar ?? 0;
@@ -165,21 +187,9 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
         }
 
         // Count pending checks (tickets without manager check)
-        samplingPendingChecks =
-            samplingTickets.data
-                ?.where((t) => !(t.has_manager_check ?? false))
-                .length ??
-            0;
-        labPendingChecks =
-            labTickets.data
-                ?.where((t) => !(t.has_manager_check ?? false))
-                .length ??
-            0;
-        unloadingPendingChecks =
-            unloadingTickets.data
-                ?.where((t) => !(t.has_manager_check ?? false))
-                .length ??
-            0;
+        samplingPendingChecks = samplingRandomTickets.length;
+        labPendingChecks = labRandomTickets.length;
+        unloadingPendingChecks = unloadingRandomTickets.length;
       });
     } catch (e) {
       print("Gagal load statistik POME: $e");
@@ -349,7 +359,7 @@ class _HomeManagerPomeState extends State<HomeManagerPome> {
                 child: Column(
                   children: [
                     const Text(
-                      "QC Sample POME",
+                      "POME",
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,

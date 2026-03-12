@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
 import 'package:flutter_vcf/Manager/CPO/tiket/lb_tiket_manager_cpo.dart';
 import 'package:flutter_vcf/Manager/CPO/tiket/sp_tiket_manager_cpo.dart';
 import 'package:flutter_vcf/Manager/CPO/tiket/un_tiket_manager_cpo.dart';
@@ -179,6 +180,27 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
         stage: "unloading",
       );
 
+      final samplingRandomTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: token,
+        stage: 'sampling',
+        tickets: samplingTickets.data ?? [],
+      );
+
+      final labRandomTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: token,
+        stage: 'lab',
+        tickets: labTickets.data ?? [],
+      );
+
+      final unloadingRandomTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: token,
+        stage: 'unloading',
+        tickets: unloadingTickets.data ?? [],
+      );
+
       setState(() {
         totalSampleKeluar =
             sampleStats.data?.statistics?.total_truk_keluar ?? 0;
@@ -201,21 +223,9 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
         }
 
         // Count pending checks (tickets without manager check)
-        samplingPendingChecks =
-            samplingTickets.data
-                ?.where((t) => !(t.has_manager_check ?? false))
-                .length ??
-            0;
-        labPendingChecks =
-            labTickets.data
-                ?.where((t) => !(t.has_manager_check ?? false))
-                .length ??
-            0;
-        unloadingPendingChecks =
-            unloadingTickets.data
-                ?.where((t) => !(t.has_manager_check ?? false))
-                .length ??
-            0;
+        samplingPendingChecks = samplingRandomTickets.length;
+        labPendingChecks = labRandomTickets.length;
+        unloadingPendingChecks = unloadingRandomTickets.length;
       });
     } catch (e) {
       print("ERROR LOAD STATISTICS: $e");
@@ -395,7 +405,7 @@ class _ManagerHomeSwipeState extends State<ManagerHomeSwipe> {
                 child: Column(
                   children: [
                     const Text(
-                      "QC Sample CPO",
+                      "CPO",
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,

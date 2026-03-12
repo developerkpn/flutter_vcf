@@ -75,8 +75,12 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
         return "APPROVED";
       case "hold":
         return "HOLD";
+      case "cancel":
+        return "CANCEL";
       case "rejected":
         return "REJECTED";
+      case "pending_manager_approval":
+        return "Pending Manager Approval";
       default:
         return "PENDING";
     }
@@ -88,8 +92,11 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
         return Colors.green;
       case "hold":
         return Colors.orange;
+      case "cancel":
       case "rejected":
         return Colors.red;
+      case "pending_manager_approval":
+        return Colors.yellow.shade700;
       default:
         return Colors.grey;
     }
@@ -101,15 +108,49 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
         return Icons.check_circle_outline;
       case "hold":
         return Icons.pause_circle_outline;
+      case "cancel":
       case "rejected":
         return Icons.cancel_outlined;
+      case "pending_manager_approval":
+        return Icons.error_outline;
       default:
         return Icons.hourglass_bottom;
     }
   }
 
-  bool _isPendingManagerApproval(QcLabPomeVehicle v) {
-    return (v.registStatus ?? '').toLowerCase().trim() == 'random_check';
+  bool _isLabAdvancedAfterManagerApproval(String registStatus) {
+    return registStatus == 'unloading' ||
+        registStatus == 'wb_out' ||
+        registStatus.startsWith('unloading') ||
+        registStatus.startsWith('qc_reunloading') ||
+        registStatus.startsWith('qc_resampling');
+  }
+
+  bool _isCancelStatus(String? rawStatus) {
+    final value = (rawStatus ?? '').toLowerCase().trim();
+    return value.contains('cancel');
+  }
+
+  String _resolveDisplayStatus(QcLabPomeVehicle v) {
+    final regist = (v.registStatus ?? '').toLowerCase().trim();
+    final lab = (v.labStatus ?? '').toLowerCase().trim();
+
+    if (regist == 'random_check') return 'pending_manager_approval';
+
+    if (_isCancelStatus(regist) || _isCancelStatus(lab)) {
+      return 'cancel';
+    }
+
+    if (lab == 'rejected' && _isLabAdvancedAfterManagerApproval(regist)) {
+      return 'approved';
+    }
+
+    if (lab == 'rejected') {
+      return 'rejected';
+    }
+
+    if (lab.isNotEmpty) return lab;
+    return regist;
   }
 
   Future<void> _openAddPage() async {
@@ -159,21 +200,14 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
               itemBuilder: (_, i) {
                 final t = tickets[i];
 
-                final lab = (t.labStatus ?? "").toLowerCase();
-                final isPendingManagerApproval = _isPendingManagerApproval(t);
-                final chipColor = isPendingManagerApproval
-                    ? Colors.yellow.shade700
-                    : statusColor(lab);
-                final chipIcon = isPendingManagerApproval
-                    ? Icons.error_outline
-                    : statusIcon(lab);
-                final chipLabel = isPendingManagerApproval
-                    ? 'Pending Manager Approval'
-                    : statusLabel(lab);
+                final lab = _resolveDisplayStatus(t);
+                final chipColor = statusColor(lab);
+                final chipIcon = statusIcon(lab);
+                final chipLabel = statusLabel(lab);
 
                 return GestureDetector(
                   onTap: () {
-                    if (!isPendingManagerApproval && lab == "hold") {
+                    if (lab == "hold") {
                       _openEditPage(t);
                     }
                   },

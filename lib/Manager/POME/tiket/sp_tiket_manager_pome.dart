@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_ticket.dart';
@@ -49,48 +50,30 @@ class _SpTiketManagerPOMEPageState extends State<SpTiketManagerPOMEPage> {
     return token;
   }
 
-  List<ManagerCheckTicket> _dedupeTickets(List<ManagerCheckTicket> source) {
-    final Map<String, ManagerCheckTicket> map = {};
-
-    String keyOf(ManagerCheckTicket ticket) {
-      final reg = ticket.registration_id?.trim();
-      if (reg != null && reg.isNotEmpty) return reg;
-      return "${ticket.wb_ticket_no ?? '-'}|${ticket.plate_number ?? '-'}";
-    }
-
-    int priorityOf(ManagerCheckTicket ticket) {
-      final latest = (ticket.latest_check_status ?? '').toUpperCase().trim();
-      if (latest == 'PENDING') return 3;
-      if (latest == 'APPROVE' || latest == 'APPROVED') return 2;
-      if (latest == 'REJECT' || latest == 'REJECTED') return 2;
-      if (ticket.has_manager_check == true) return 1;
-      return 0;
-    }
-
-    for (final ticket in source) {
-      final key = keyOf(ticket);
-      final current = map[key];
-      if (current == null || priorityOf(ticket) > priorityOf(current)) {
-        map[key] = ticket;
-      }
-    }
-
-    return map.values.toList();
-  }
-
   Future<void> fetchTickets() async {
     setState(() => isLoading = true);
     try {
       final token = await getToken();
+      final rawToken = (token ?? widget.token).trim();
+      final authToken = rawToken.startsWith('Bearer ')
+          ? rawToken
+          : 'Bearer $rawToken';
       final res = await api.getManagerCheckTickets(
-        "Bearer $token",
+        authToken,
         "POME",
         stage: "sampling",
       );
 
+      final randomStageTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: authToken,
+        stage: 'sampling',
+        tickets: res.data ?? [],
+      );
+
       if (!mounted) return;
       setState(() {
-        tickets = _dedupeTickets(res.data ?? []);
+        tickets = randomStageTickets;
         isLoading = false;
       });
     } catch (e) {

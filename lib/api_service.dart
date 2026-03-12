@@ -108,7 +108,11 @@ abstract class ApiService {
   });
 
   @GET('unloading/cpo/vehicles')
-  Future<UnloadingCPOResponse> getPosts(@Header('Authorization') String token);
+  Future<UnloadingCPOResponse> getPosts(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  });
 
   @GET('unloading/cpo/{identifier}')
   Future<UnloadingCPOResponse> getUnloading(
@@ -196,7 +200,10 @@ abstract class ApiService {
 
   @GET("unloading/pome/vehicles")
   Future<UnloadingPOMEResponse> getUnloadingPomeData(
-    @Header("Authorization") String token,
+    @Header("Authorization") String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  }
   );
 
   @GET("unloading/pome/{registrationId}")
@@ -271,7 +278,10 @@ abstract class ApiService {
 
   @GET("/unloading/pk/vehicles")
   Future<UnloadingPkResponse> getUnloadingPk(
-    @Header("Authorization") String token,
+    @Header("Authorization") String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  }
   );
 
   @GET("/unloading/pk/{registrationId}")

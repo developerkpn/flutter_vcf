@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_detail.dart';
@@ -58,15 +58,26 @@ class _LbTiketManagerPKPageState extends State<LbTiketManagerPKPage> {
     setState(() => isLoading = true);
     try {
       final token = await getToken();
+      final rawToken = (token ?? widget.token).trim();
+      final authToken = rawToken.startsWith('Bearer ')
+          ? rawToken
+          : 'Bearer $rawToken';
       final res = await api.getManagerCheckTickets(
-        "Bearer $token",
+        authToken,
         "PK",
         stage: "lab",
       );
 
+      final randomStageTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: authToken,
+        stage: 'lab',
+        tickets: res.data ?? [],
+      );
+
       if (!mounted) return;
       setState(() {
-        tickets = res.data ?? [];
+        tickets = randomStageTickets;
         isLoading = false;
       });
     } catch (e) {
@@ -107,13 +118,13 @@ class _LbTiketManagerPKPageState extends State<LbTiketManagerPKPage> {
                       .toUpperCase()
                       .trim();
                   final latestStatus = rawLatestStatus == 'APPROVED'
-                    ? 'APPROVE'
-                    : rawLatestStatus == 'REJECTED'
-                    ? 'REJECT'
-                    : rawLatestStatus;
+                      ? 'APPROVE'
+                      : rawLatestStatus == 'REJECTED'
+                      ? 'REJECT'
+                      : rawLatestStatus;
                   final isPendingCheck = latestStatus == 'PENDING';
                   final isFinalChecked =
-                    latestStatus == 'APPROVE' || latestStatus == 'REJECT';
+                      latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
                   final isChecked = hasManagerCheck && isFinalChecked;
 
@@ -319,11 +330,6 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   bool isLoading = true;
   bool isSubmitting = false;
 
-  // PK has FFA, Moisture, Dirt, Oil Content (not DOBI, IV)
-  final TextEditingController ffaCtrl = TextEditingController();
-  final TextEditingController moistCtrl = TextEditingController();
-  final TextEditingController dirtCtrl = TextEditingController();
-  final TextEditingController oilContentCtrl = TextEditingController();
   final TextEditingController remarksCtrl = TextEditingController();
 
   late ApiService api;
@@ -337,10 +343,6 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
 
   @override
   void dispose() {
-    ffaCtrl.dispose();
-    moistCtrl.dispose();
-    dirtCtrl.dispose();
-    oilContentCtrl.dispose();
     remarksCtrl.dispose();
     super.dispose();
   }
@@ -400,7 +402,9 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
       if (!mounted) return;
       setState(() {
         detail = res.data;
-        operatorLabData = managerLabDataEmpty ? fallbackLabData : managerLabData;
+        operatorLabData = managerLabDataEmpty
+            ? fallbackLabData
+            : managerLabData;
         isLoading = false;
       });
     } catch (e) {
@@ -413,97 +417,11 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   }
 
   Future<void> _submit(String status) async {
-    debugPrint('[Manager Lab Check PK] Starting submission');
-    debugPrint('[Manager Lab Check PK] Status: $status');
-    debugPrint(
-      '[Manager Lab Check PK] Process ID: ${widget.ticket.process_id}',
-    );
-    debugPrint(
-      '[Manager Lab Check PK] Registration ID: ${widget.ticket.registration_id}',
-    );
-
-    // Validate required fields (PK: FFA, Moisture, Dirt, Oil Content)
-    if (ffaCtrl.text.isEmpty ||
-        moistCtrl.text.isEmpty ||
-        dirtCtrl.text.isEmpty ||
-        oilContentCtrl.text.isEmpty) {
-      debugPrint(
-        '[Manager Lab Check PK] Validation failed: Empty required fields',
-      );
-      debugPrint(
-        '[Manager Lab Check PK] FFA: ${ffaCtrl.text.isEmpty ? "EMPTY" : ffaCtrl.text}',
-      );
-      debugPrint(
-        '[Manager Lab Check PK] Moisture: ${moistCtrl.text.isEmpty ? "EMPTY" : moistCtrl.text}',
-      );
-      debugPrint(
-        '[Manager Lab Check PK] Dirt: ${dirtCtrl.text.isEmpty ? "EMPTY" : dirtCtrl.text}',
-      );
-      debugPrint(
-        '[Manager Lab Check PK] Oil Content: ${oilContentCtrl.text.isEmpty ? "EMPTY" : oilContentCtrl.text}',
-      );
+    final registrationId = widget.ticket.registration_id?.trim();
+    if (registrationId == null || registrationId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("All lab fields are required"),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Parse and validate values
-    double mgrFfa, mgrMoisture, mgrDirt, mgrOilContent;
-    try {
-      mgrFfa = double.parse(ffaCtrl.text);
-      mgrMoisture = double.parse(moistCtrl.text);
-      mgrDirt = double.parse(dirtCtrl.text);
-      mgrOilContent = double.parse(oilContentCtrl.text);
-    } on FormatException catch (e) {
-      debugPrint(
-        '[Manager Lab Check PK] FormatException: Invalid number format',
-      );
-      debugPrint('[Manager Lab Check PK] Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Invalid number format"),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Validate ranges (matching operator validation)
-    if (mgrFfa < 0 || mgrFfa > 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("FFA value must be between 0 and 100"),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    if (mgrMoisture < 0 || mgrMoisture > 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Moisture value must be between 0 and 100"),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    if (mgrDirt < 0 || mgrDirt > 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Dirt value must be between 0 and 100"),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    if (mgrOilContent < 0 || mgrOilContent > 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Oil content value must be between 0 and 100"),
+          content: Text('Registration ID tidak ditemukan'),
           backgroundColor: Colors.red,
         ),
       );
@@ -513,30 +431,13 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
     setState(() => isSubmitting = true);
 
     try {
-      debugPrint('[Manager Lab Check PK] Parsed values:');
-      debugPrint('[Manager Lab Check PK]   mgr_ffa: $mgrFfa');
-      debugPrint('[Manager Lab Check PK]   mgr_moisture: $mgrMoisture');
-      debugPrint('[Manager Lab Check PK]   mgr_dirt: $mgrDirt');
-      debugPrint('[Manager Lab Check PK]   mgr_oil_content: $mgrOilContent');
-      debugPrint('[Manager Lab Check PK]   remarks: ${remarksCtrl.text}');
-
       final requestData = {
-        "process_id": widget.ticket.process_id,
-        "check_status": status,
-        "remarks": remarksCtrl.text,
-        "mgr_ffa": mgrFfa,
-        "mgr_moisture": mgrMoisture,
-        "mgr_dirt": mgrDirt,
-        "mgr_oil_content": mgrOilContent,
-        // PK does NOT have mgr_dobi or mgr_iv
+        'registration_id': registrationId,
+        'check_status': status.toUpperCase(),
+        'remarks': remarksCtrl.text.trim(),
       };
 
-      debugPrint('[Manager Lab Check PK] Request payload: $requestData');
-      debugPrint('[Manager Lab Check PK] Sending API request...');
-
       await api.submitManagerLabCheck("Bearer ${widget.token}", requestData);
-
-      debugPrint('[Manager Lab Check PK] API request successful');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -550,24 +451,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
       if (!mounted) return;
       setState(() => isSubmitting = false);
 
-      debugPrint('[Manager Lab Check PK] DioException occurred');
-      debugPrint('[Manager Lab Check PK] Error type: ${e.type}');
-      debugPrint('[Manager Lab Check PK] Error message: ${e.message}');
-      debugPrint(
-        '[Manager Lab Check PK] Status code: ${e.response?.statusCode}',
-      );
-      debugPrint('[Manager Lab Check PK] Response data: ${e.response?.data}');
-      debugPrint(
-        '[Manager Lab Check PK] Request options: ${e.requestOptions.uri}',
-      );
-      debugPrint(
-        '[Manager Lab Check PK] Request data: ${e.requestOptions.data}',
-      );
-
       if (e.response?.statusCode == 409) {
-        debugPrint(
-          '[Manager Lab Check PK] 409 Conflict: Ticket already checked',
-        );
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("This ticket has already been checked"),
@@ -580,7 +464,6 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
 
       final errorMessage =
           e.response?.data?['message'] ?? e.message ?? 'Unknown error';
-      debugPrint('[Manager Lab Check PK] Showing error to user: $errorMessage');
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -588,30 +471,9 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
           backgroundColor: Colors.red,
         ),
       );
-    } on FormatException catch (e) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => isSubmitting = false);
-      debugPrint(
-        '[Manager Lab Check PK] FormatException: Invalid number format',
-      );
-      debugPrint('[Manager Lab Check PK] Error: $e');
-      debugPrint('[Manager Lab Check PK] FFA text: "${ffaCtrl.text}"');
-      debugPrint('[Manager Lab Check PK] Moisture text: "${moistCtrl.text}"');
-      debugPrint('[Manager Lab Check PK] Dirt text: "${dirtCtrl.text}"');
-      debugPrint(
-        '[Manager Lab Check PK] Oil Content text: "${oilContentCtrl.text}"',
-      );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Invalid number format"),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } catch (e, stackTrace) {
-      if (!mounted) return;
-      setState(() => isSubmitting = false);
-      debugPrint('[Manager Lab Check PK] Unexpected exception: $e');
-      debugPrint('[Manager Lab Check PK] Stack trace: $stackTrace');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
       );
@@ -637,23 +499,6 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
             child: Text(value),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _numericField(String label, TextEditingController ctrl) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: ctrl,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-        ],
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
       ),
     );
   }
@@ -760,7 +605,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
 
                   const SizedBox(height: 16),
 
-                  // Manager Input Fields Card (PK: FFA, Moisture, Dirt, Oil Content)
+                  // Manager review info (operator values are read-only)
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -768,17 +613,20 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "Manager Lab Values",
+                            "Verifikasi Manager",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                           ),
                           const Divider(),
-                          _numericField("Manager FFA", ffaCtrl),
-                          _numericField("Manager Moisture", moistCtrl),
-                          _numericField("Manager Dirt", dirtCtrl),
-                          _numericField("Manager Oil Content", oilContentCtrl),
+                          Text(
+                            "Nilai operator bersifat read-only. Manager hanya pilih APPROVE/REJECT dan isi remarks bila perlu.",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
                         ],
                       ),
                     ),

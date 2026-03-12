@@ -454,9 +454,10 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
       if (!mounted) return;
 
       if (res.success == true) {
+        final statusLabel = status == "hold" ? "RESAMPLING" : status.toUpperCase();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Unloading PK ${status.toUpperCase()} berhasil"),
+            content: Text("Unloading PK $statusLabel berhasil"),
           ),
         );
         Navigator.pop(context, {
@@ -792,7 +793,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _btn(
-                    "Hold",
+                    "Resampling",
                     Colors.orange,
                     () => _confirmAndSubmit("hold"),
                     enabled: !disableHoldButton,
@@ -811,7 +812,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
             if (pageMode == 'hold_resampling') ...[
               const SizedBox(height: 8),
               Text(
-                "Mode: HOLD (RESAMPLING). Menunggu resampling & re-lab. Tidak dapat mengubah data.",
+                "Mode: RESAMPLING. Menunggu resampling & re-lab. Tidak dapat mengubah data.",
                 style: TextStyle(fontSize: baseFont - 1, color: Colors.black54),
               ),
             ],
