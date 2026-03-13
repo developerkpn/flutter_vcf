@@ -40,16 +40,24 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
 
     try {
       final token = await getToken();
-      final res = await api.getQcLabPkVehicles("Bearer $token");
+      final res = await api.getQcLabPkVehicles(
+        "Bearer $token",
+        includeRejected: true,
+        includeCancel: true,
+      );
 
       final vehicles = (res.data ?? []).where((v) {
-        final status = (v.labStatus ?? "").toLowerCase();
+        final status = (v.labStatus ?? "").toLowerCase().trim();
         final isRelab = v.isRelab == true;
         final registStatus = (v.registStatus ?? '').toLowerCase().trim();
         final isRelabStage = isRelab || registStatus.startsWith('qc_relab');
+        final isCancel =
+            _isCancelStatus(registStatus) || _isCancelStatus(v.labStatus);
 
         final processed = ["approved", "rejected", "hold"].contains(status);
         final isRandomCheck = !isRelabStage && registStatus == 'random_check';
+
+        if (isCancel) return true;
 
         if (!isRelabStage && (processed || isRandomCheck)) return true;
 

@@ -45,7 +45,9 @@ bool isRejectedOperatorStatus(String? status) {
   if (normalized.isEmpty) return false;
 
   // Common positive cases from backend naming conventions.
-  if (normalized.contains('reject')) return true;
+  if (normalized.contains('reject') || normalized.contains('cancel')) {
+    return true;
+  }
 
   return false;
 }
@@ -259,12 +261,26 @@ bool hasFinalManagerDecisionForStage({
   required String stage,
   required dynamic detail,
 }) {
+  final finalStatus = resolveFinalManagerDecisionForStage(
+    stage: stage,
+    detail: detail,
+  );
+  return finalStatus == 'APPROVE' ||
+      finalStatus == 'REJECT' ||
+      finalStatus == 'CANCEL';
+}
+
+String resolveFinalManagerDecisionForStage({
+  required String stage,
+  required dynamic detail,
+}) {
   final normalizedStage = normalizeManagerCheckStage(stage);
   final managerChecks = detail?.manager_checks;
   if (managerChecks is! List || managerChecks.isEmpty) {
-    return false;
+    return '';
   }
 
+  String resolved = '';
   for (final check in managerChecks) {
     final dynamic entry = check;
     final checkStage = normalizeManagerCheckStage(entry?.stage?.toString());
@@ -278,11 +294,11 @@ bool hasFinalManagerDecisionForStage({
     if (normalizedStatus == 'APPROVE' ||
         normalizedStatus == 'REJECT' ||
         normalizedStatus == 'CANCEL') {
-      return true;
+      resolved = normalizedStatus;
     }
   }
 
-  return false;
+  return resolved;
 }
 
 bool isPendingManagerCheckTicket(ManagerCheckTicket ticket) {
@@ -300,6 +316,64 @@ bool isPendingManagerCheckTicket(ManagerCheckTicket ticket) {
 
   // Fallback for payloads that only expose has_manager_check.
   return latestStatus.isEmpty;
+}
+
+String resolveLatestManagerCheckStatus(ManagerCheckTicket ticket) {
+  final stageScopedStatus = normalizeManagerCheckStatus(
+    ticket.latest_check_status,
+  );
+  if (stageScopedStatus.isNotEmpty) {
+    return stageScopedStatus;
+  }
+
+  final hasStageManagerCheck =
+      ticket.has_manager_check == true ||
+      (ticket.manager_checks_count ?? 0) > 0;
+  if (!hasStageManagerCheck) {
+    return '';
+  }
+
+  return normalizeManagerCheckStatus(
+    ticket.latest_manager_check_status_overall,
+  );
+}
+
+bool hasFinalManagerDecisionOnTicket(ManagerCheckTicket ticket) {
+  final latestStatus = resolveLatestManagerCheckStatus(ticket);
+  return latestStatus == 'APPROVE' ||
+      latestStatus == 'REJECT' ||
+      latestStatus == 'CANCEL';
+}
+
+bool isRejectedTicketCancelledByManager(ManagerCheckTicket ticket) {
+  final latestStatus = resolveLatestManagerCheckStatus(ticket);
+  if (latestStatus == 'REJECT' || latestStatus == 'CANCEL') {
+    return true;
+  }
+
+  final registStatus = _normalizeStatusToken(ticket.regist_status);
+  final stageStatus = _normalizeStatusToken(ticket.latest_check_status);
+  final overallStatus = _normalizeStatusToken(
+    ticket.latest_manager_check_status_overall,
+  );
+
+  return registStatus.contains('cancel') ||
+      stageStatus.contains('cancel') ||
+      overallStatus.contains('cancel');
+}
+
+int countActionableRejectedOperatorTickets(List<ManagerCheckTicket> tickets) {
+  return tickets.where((ticket) {
+    if (hasFinalManagerDecisionOnTicket(ticket)) {
+      return false;
+    }
+
+    if (isRejectedTicketCancelledByManager(ticket)) {
+      return false;
+    }
+
+    return true;
+  }).length;
 }
 
 bool isManagerTicketForStage(ManagerCheckTicket ticket, String stage) {
@@ -426,13 +500,9 @@ List<ManagerCheckTicket> dedupeManagerCheckTicketsByEntry(
   final result = <ManagerCheckTicket>[];
 
   for (final ticket in source) {
-    final key = [
-      resolveManagerTicketIdentifier(ticket) ?? '-',
-      normalizeManagerCheckStage(ticket.current_stage),
-      ticket.created_at?.trim() ?? '-',
-      normalizeManagerCheckStatus(ticket.latest_check_status),
-      ticket.manager_checks_count?.toString() ?? '-',
-    ].join('|');
+    final key =
+        resolveManagerTicketIdentifier(ticket) ??
+        '${ticket.wb_ticket_no ?? '-'}|${ticket.plate_number ?? '-'}';
 
     if (seen.add(key)) {
       result.add(ticket);
@@ -551,13 +621,17 @@ Future<List<ManagerCheckTicket>> filterRejectedOperatorTicketsByStage({
           // Do not use broad stage-level final-decision guard for PK relab /
           // reunloading aliases, because previous cycle checks can be present
           // and should not hide current rejected cycles.
-          if (!isPkCommodity &&
-              !isPkCycleAlias &&
-              hasFinalManagerDecisionForStage(
-                stage: normalizedStage,
-                detail: detail.data,
-              )) {
-            return null;
+          if (!isPkCommodity && !isPkCycleAlias) {
+            final finalDecision = resolveFinalManagerDecisionForStage(
+              stage: normalizedStage,
+              detail: detail.data,
+            );
+
+            // Keep canceled tickets visible in rejected list history,
+            // but remove manager-approved tickets from rejected queue/list.
+            if (finalDecision == 'APPROVE') {
+              return null;
+            }
           }
 
           return ticket;

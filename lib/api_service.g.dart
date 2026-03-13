@@ -185,9 +185,17 @@ class _ApiService implements ApiService {
   }
 
   @override
-  Future<QcLabCpoVehiclesResponse> getQcLabCpoVehicles(String token) async {
+  Future<QcLabCpoVehiclesResponse> getQcLabCpoVehicles(
+    String token, {
+    bool? includeRejected,
+    bool? includeCancel,
+  }) async {
     final _extra = <String, dynamic>{};
-    final queryParameters = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{
+      r'include_rejected': includeRejected,
+      r'include_cancel': includeCancel,
+    };
+    queryParameters.removeWhere((k, v) => v == null);
     final _headers = <String, dynamic>{r'Authorization': token};
     _headers.removeWhere((k, v) => v == null);
     const Map<String, dynamic>? _data = null;
@@ -663,9 +671,17 @@ class _ApiService implements ApiService {
   }
 
   @override
-  Future<QcLabPomeResponse> getQcLabPomeVehicles(String token) async {
+  Future<QcLabPomeResponse> getQcLabPomeVehicles(
+    String token, {
+    bool? includeRejected,
+    bool? includeCancel,
+  }) async {
     final _extra = <String, dynamic>{};
-    final queryParameters = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{
+      r'include_rejected': includeRejected,
+      r'include_cancel': includeCancel,
+    };
+    queryParameters.removeWhere((k, v) => v == null);
     final _headers = <String, dynamic>{r'Authorization': token};
     _headers.removeWhere((k, v) => v == null);
     const Map<String, dynamic>? _data = null;
@@ -1054,9 +1070,17 @@ class _ApiService implements ApiService {
   }
 
   @override
-  Future<QcLabPkVehiclesResponse> getQcLabPkVehicles(String token) async {
+  Future<QcLabPkVehiclesResponse> getQcLabPkVehicles(
+    String token, {
+    bool? includeRejected,
+    bool? includeCancel,
+  }) async {
     final _extra = <String, dynamic>{};
-    final queryParameters = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{
+      r'include_rejected': includeRejected,
+      r'include_cancel': includeCancel,
+    };
+    queryParameters.removeWhere((k, v) => v == null);
     final _headers = <String, dynamic>{r'Authorization': token};
     _headers.removeWhere((k, v) => v == null);
     const Map<String, dynamic>? _data = null;

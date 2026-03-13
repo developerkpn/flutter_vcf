@@ -94,12 +94,22 @@ class _ManagerRejectedTicketsPageState
       );
 
       var sourceTickets = stageScopedRes.data ?? const <ManagerCheckTicket>[];
-      if (sourceTickets.isEmpty) {
+
+      // Merge with commodity-wide list because some backend payloads only
+      // expose finalized manager decisions (e.g. CANCEL) in non-stage query.
+      try {
         final fallbackRes = await _api.getManagerCheckTickets(
           authToken,
           _commodityLabel,
         );
-        sourceTickets = fallbackRes.data ?? const <ManagerCheckTicket>[];
+        final fallbackTickets =
+            fallbackRes.data ?? const <ManagerCheckTicket>[];
+        sourceTickets = dedupeManagerCheckTicketsByEntry([
+          ...sourceTickets,
+          ...fallbackTickets,
+        ]);
+      } catch (_) {
+        // Keep stage-scoped result when fallback request fails.
       }
 
       final filtered = await filterRejectedOperatorTicketsByStage(
@@ -145,13 +155,30 @@ class _ManagerRejectedTicketsPageState
     }
   }
 
+  String _ticketBadgeText(ManagerCheckTicket ticket) {
+    if (isRejectedTicketCancelledByManager(ticket)) {
+      return 'CANCEL';
+    }
+    return 'REJECTED OPERATOR';
+  }
+
   Widget _buildTicketCard(ManagerCheckTicket ticket) {
+    final isCancelledTicket = isRejectedTicketCancelledByManager(ticket);
+    final badgeText = _ticketBadgeText(ticket);
+    final badgeColor = isCancelledTicket ? Colors.grey.shade700 : Colors.red;
+    final badgeBackgroundColor = isCancelledTicket
+        ? Colors.grey.withOpacity(0.15)
+        : Colors.red.withOpacity(0.1);
+    final badgeBorderColor = isCancelledTicket
+        ? Colors.grey.shade500
+        : Colors.red.shade400;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: InkWell(
-        onTap: () => _openDetail(ticket),
+        onTap: isCancelledTicket ? null : () => _openDetail(ticket),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -175,24 +202,24 @@ class _ManagerRejectedTicketsPageState
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: badgeBackgroundColor,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.red.shade400),
+                      border: Border.all(color: badgeBorderColor),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         Icon(
                           Icons.cancel_outlined,
                           size: 14,
-                          color: Colors.red,
+                          color: badgeColor,
                         ),
-                        SizedBox(width: 4),
+                        const SizedBox(width: 4),
                         Text(
-                          'REJECTED OPERATOR',
+                          badgeText,
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.red,
+                            color: badgeColor,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -888,8 +915,9 @@ class _ManagerRejectedDetailPageState extends State<ManagerRejectedDetailPage> {
         return 'APPROVED';
       case 'rejected':
       case 'reject':
-      case 'cancel':
         return 'REJECTED';
+      case 'cancel':
+        return 'CANCEL';
       case 'hold':
         return 'HOLD';
       case 'pending_manager_approval':

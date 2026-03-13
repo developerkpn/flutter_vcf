@@ -41,11 +41,18 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
 
     try {
       final token = await getToken();
-      final res = await api.getQcLabPomeVehicles("Bearer $token");
+      final res = await api.getQcLabPomeVehicles(
+        "Bearer $token",
+        includeRejected: true,
+        includeCancel: true,
+      );
 
       final vehicles = (res.data ?? []).where((v) {
-        final s = v.registStatus?.toLowerCase() ?? "";
-        final lab = v.labStatus?.toLowerCase();
+        final s = (v.registStatus ?? '').toLowerCase().trim();
+        final lab = (v.labStatus ?? '').toLowerCase().trim();
+        final isCancel = _isCancelStatus(s) || _isCancelStatus(lab);
+
+        if (isCancel) return true;
 
         // rule:
         // show only if already processed OR in HOLD
@@ -53,7 +60,7 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
             s == "unloading" ||
             s == "qc_lab_rejected" ||
             s == "random_check" ||
-            (s == "qc_lab" && lab != null);
+            (s == "qc_lab" && lab.isNotEmpty);
       }).toList();
 
       setState(() {

@@ -115,7 +115,9 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
           stage: 'lab',
           tickets: labTickets,
         );
-        nextLabRejectedCount = labRejectedTickets.length;
+        nextLabRejectedCount = countActionableRejectedOperatorTickets(
+          labRejectedTickets,
+        );
 
         final unloadRejectedTickets =
             await filterRejectedOperatorTicketsByStage(
@@ -124,7 +126,9 @@ class _DataTrukPkPageState extends State<DataTrukPkPage> {
               stage: 'unloading',
               tickets: unloadingTickets,
             );
-        nextUnloadRejectedCount = unloadRejectedTickets.length;
+        nextUnloadRejectedCount = countActionableRejectedOperatorTickets(
+          unloadRejectedTickets,
+        );
       } catch (_) {
         // Keep dashboard stats visible even when rejected-count fetch fails.
       }

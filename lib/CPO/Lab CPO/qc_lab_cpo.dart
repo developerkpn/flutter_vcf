@@ -41,11 +41,17 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
 
     try {
       final token = await getToken();
-      final res = await api.getQcLabCpoVehicles("Bearer $token");
+      final res = await api.getQcLabCpoVehicles(
+        "Bearer $token",
+        includeRejected: true,
+        includeCancel: true,
+      );
 
       final vehicles = (res.data ?? []).where((v) {
-        final regist = (v.regist_status ?? "").toLowerCase();
-        final labStatus = (v.lab_status ?? "").toLowerCase();
+        final regist = (v.regist_status ?? "").toLowerCase().trim();
+        final labStatus = (v.lab_status ?? "").toLowerCase().trim();
+        final isCancel =
+            _isCancelStatus(regist) || _isCancelStatus(v.lab_status);
 
         // tampilkan jika hasil lab sudah ada
         final isLabProcessed = [
@@ -59,6 +65,8 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
             regist.startsWith("qc_lab") ||
             regist == "unloading" ||
             regist == "random_check";
+
+        if (isCancel) return true;
 
         return (isValidRegist && isLabProcessed) || regist == "random_check";
       }).toList();
