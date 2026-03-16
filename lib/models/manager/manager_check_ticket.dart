@@ -30,11 +30,15 @@ class ManagerCheckTicket {
   final String? driver_name;
   final String? vendor_name;
   final String? commodity_type;
+  final String? regist_status;
   final String? current_stage;
   final String? created_at;
   final bool? has_manager_check;
   final int? manager_checks_count;
   final String? latest_check_status;
+  final bool? has_any_manager_check;
+  final int? manager_checks_count_overall;
+  final String? latest_manager_check_status_overall;
   final List<PreviousCheck>? previous_checks;
 
   ManagerCheckTicket({
@@ -45,11 +49,15 @@ class ManagerCheckTicket {
     this.driver_name,
     this.vendor_name,
     this.commodity_type,
+    this.regist_status,
     this.current_stage,
     this.created_at,
     this.has_manager_check,
     this.manager_checks_count,
     this.latest_check_status,
+    this.has_any_manager_check,
+    this.manager_checks_count_overall,
+    this.latest_manager_check_status_overall,
     this.previous_checks,
   });
 

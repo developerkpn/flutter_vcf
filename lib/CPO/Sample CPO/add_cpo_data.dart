@@ -236,12 +236,14 @@ Future<File> compressImage(File file) async {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _photoBox(1, _image1),
-                    _photoBox(2, _image2),
-                    _photoBox(3, _image3),
-                    _photoBox(4, _image4),
+                    Expanded(child: _photoBox(1, _image1)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _photoBox(2, _image2)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _photoBox(3, _image3)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _photoBox(4, _image4)),
                   ],
                 ),
               ),
@@ -328,27 +330,27 @@ Future<File> compressImage(File file) async {
 
     return GestureDetector(
       onTap: isDisabled ? null : () => _getImage(i),
-      child: Container(
-        width: 70,
-        height: 100,
-        margin: const EdgeInsets.symmetric(horizontal: 3),
-        decoration: BoxDecoration(
-          color: isDisabled ? Colors.grey.shade300 : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isDisabled ? Colors.grey.shade500 : Colors.grey.shade400,
+      child: AspectRatio(
+        aspectRatio: 3 / 4,
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDisabled ? Colors.grey.shade300 : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isDisabled ? Colors.grey.shade500 : Colors.grey.shade400,
+            ),
           ),
+          child: img == null
+              ? Icon(
+                  Icons.camera_alt,
+                  size: 24,
+                  color: isDisabled ? Colors.grey.shade600 : Colors.black54,
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.file(img, fit: BoxFit.cover),
+                ),
         ),
-        child: img == null
-            ? Icon(
-                Icons.camera_alt,
-                size: 24,
-                color: isDisabled ? Colors.grey.shade600 : Colors.black54,
-              )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.file(img, fit: BoxFit.cover),
-              ),
       ),
     );
   }

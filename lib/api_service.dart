@@ -68,6 +68,12 @@ abstract class ApiService {
     @Body() Map<String, dynamic> payload,
   );
 
+  @GET("/qc/sampling/cpo/{registrationId}")
+  Future<SubmitQcSamplingResponse> getQcSamplingCpoDetail(
+    @Header("Authorization") String token,
+    @Path("registrationId") String registrationId,
+  );
+
   //Lab CPO =================
   @GET("/qc/lab/cpo/statistics")
   Future<QcLabCpoStatisticsResponse> getQcLabCpoStatistics(
@@ -78,7 +84,10 @@ abstract class ApiService {
 
   @GET("/qc/lab/cpo/vehicles")
   Future<QcLabCpoVehiclesResponse> getQcLabCpoVehicles(
-    @Header("Authorization") String token,
+    @Header("Authorization") String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  }
   );
 
   @POST("/qc/lab/cpo/submit")
@@ -102,7 +111,11 @@ abstract class ApiService {
   });
 
   @GET('unloading/cpo/vehicles')
-  Future<UnloadingCPOResponse> getPosts(@Header('Authorization') String token);
+  Future<UnloadingCPOResponse> getPosts(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  });
 
   @GET('unloading/cpo/{identifier}')
   Future<UnloadingCPOResponse> getUnloading(
@@ -149,6 +162,12 @@ abstract class ApiService {
     @Body() Map<String, dynamic> payload,
   );
 
+  @GET("/qc/sampling/pome/{registrationId}")
+  Future<SubmitQcSamplingPomeResponse> getQcSamplingPomeDetail(
+    @Header("Authorization") String token,
+    @Path("registrationId") String registrationId,
+  );
+
   // QC Lab POME ======================
   @GET("/qc/lab/pome/statistics")
   Future<QcLabPomeStatisticsResponse> getQcLabPomeStatistics(
@@ -159,7 +178,10 @@ abstract class ApiService {
 
   @GET("/qc/lab/pome/vehicles")
   Future<QcLabPomeResponse> getQcLabPomeVehicles(
-    @Header("Authorization") String token,
+    @Header("Authorization") String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  }
   );
 
   @GET("/qc/lab/pome/{registrationId}")
@@ -184,7 +206,10 @@ abstract class ApiService {
 
   @GET("unloading/pome/vehicles")
   Future<UnloadingPOMEResponse> getUnloadingPomeData(
-    @Header("Authorization") String token,
+    @Header("Authorization") String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  }
   );
 
   @GET("unloading/pome/{registrationId}")
@@ -234,7 +259,10 @@ abstract class ApiService {
 
   @GET("/qc/lab/pk/vehicles")
   Future<QcLabPkVehiclesResponse> getQcLabPkVehicles(
-    @Header("Authorization") String token,
+    @Header("Authorization") String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  }
   );
 
   @POST("/qc/lab/pk/submit")
@@ -259,7 +287,10 @@ abstract class ApiService {
 
   @GET("/unloading/pk/vehicles")
   Future<UnloadingPkResponse> getUnloadingPk(
-    @Header("Authorization") String token,
+    @Header("Authorization") String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  }
   );
 
   @GET("/unloading/pk/{registrationId}")

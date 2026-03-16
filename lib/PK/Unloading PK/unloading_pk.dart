@@ -31,6 +31,22 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
   String normalizedStatus(String? registStatus, String? unloadingStatus) {
     final reg = (registStatus ?? "").toLowerCase();
     final unload = (unloadingStatus ?? "").toLowerCase();
+    final hasRejectedStatus =
+        reg.contains("rejected") || unload.contains("rejected");
+
+    if (reg.contains("cancel") || unload.contains("cancel")) {
+      return "cancel";
+    }
+
+    if (reg == "random_check") return "pending_manager_approval";
+
+    if (hasRejectedStatus) {
+      // If registration already moved forward, follow registration stage.
+      if (reg == "wb_out") return "done";
+      if (reg == "qc_resampling") return "qc_resampling";
+      if (reg == "qc_reunloading") return "qc_reunloading";
+      return "rejected";
+    }
 
     // HOLD tahap unloading (sudah selesai resampling + relab)
     if (reg == "unloading" && unload == "hold") return "hold_unloading";
@@ -43,7 +59,6 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
 
     if (reg == "qc_resampling") return "qc_resampling";
     if (reg == "qc_reunloading") return "qc_reunloading";
-    if (reg == "random_check") return "pending_manager_approval";
     if (reg == "wb_out") return "done";
     if (unload == "approved") return "done";
 
@@ -53,17 +68,21 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
   String displayStatus(String status) {
     switch (status) {
       case "hold_unloading":
-        return "HOLD (UNLOADING)";
+        return "RESAMPLING";
       case "hold_reunloading":
-        return "HOLD (RE-UNLOADING)";
+        return "RESAMPLING";
       case "hold_resampling":
-        return "HOLD (RESAMPLING)";
+        return "RESAMPLING";
       case "qc_resampling":
         return "RESAMPLING";
       case "qc_reunloading":
         return "RE-UNLOADING";
       case "pending_manager_approval":
         return "Pending Manager Approval";
+      case "cancel":
+        return "CANCEL";
+      case "rejected":
+        return "REJECTED";
       case "done":
         return "DONE";
       default:
@@ -85,6 +104,9 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
         return Colors.blue;
       case "pending_manager_approval":
         return Colors.yellow.shade700;
+      case "cancel":
+      case "rejected":
+        return Colors.red;
       case "done":
         return Colors.green;
       default:
@@ -106,6 +128,9 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
         return Icons.refresh;
       case "pending_manager_approval":
         return Icons.error_outline;
+      case "cancel":
+      case "rejected":
+        return Icons.cancel_outlined;
       case "done":
         return Icons.check_circle_outline;
       default:
@@ -152,7 +177,12 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
         ],
       ),
       body: FutureBuilder<UnloadingPkResponse>(
-        future: _getToken().then((t) => apiService.getUnloadingPk("Bearer $t")),
+        future: _getToken().then(
+          (t) => apiService.getUnloadingPk(
+            "Bearer $t",
+            includeRejected: true,
+          ),
+        ),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -167,13 +197,16 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
 
           final unloadingTrucks = trucks.where((e) {
             final status = normalizedStatus(e.registStatus, e.unloadingStatus);
-            return status == "qc_resampling" ||
-                status == "qc_reunloading" ||
-                status == "hold_unloading" ||
-                status == "hold_reunloading" ||
-                status == "hold_resampling" ||
-                status == "pending_manager_approval" ||
-                status == "done";
+            if (status.isEmpty) return false;
+
+            // Keep unloading dashboard resilient to backend status variants.
+            if (status == "sampling" ||
+                status == "lab" ||
+                status == "unloading") {
+              return false;
+            }
+
+            return true;
           }).toList();
 
           if (unloadingTrucks.isEmpty) {

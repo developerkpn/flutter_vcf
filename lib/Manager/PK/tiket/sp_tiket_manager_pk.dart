@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_ticket.dart';
@@ -53,15 +54,26 @@ class _SpTiketManagerPKPageState extends State<SpTiketManagerPKPage> {
     setState(() => isLoading = true);
     try {
       final token = await getToken();
+      final rawToken = (token ?? widget.token).trim();
+      final authToken = rawToken.startsWith('Bearer ')
+          ? rawToken
+          : 'Bearer $rawToken';
       final res = await api.getManagerCheckTickets(
-        "Bearer $token",
+        authToken,
         "PK",
         stage: "sampling",
       );
 
+      final randomStageTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: authToken,
+        stage: 'sampling',
+        tickets: res.data ?? [],
+      );
+
       if (!mounted) return;
       setState(() {
-        tickets = res.data ?? [];
+        tickets = randomStageTickets;
         isLoading = false;
       });
     } catch (e) {
@@ -98,12 +110,19 @@ class _SpTiketManagerPKPageState extends State<SpTiketManagerPKPage> {
                 itemCount: tickets.length,
                 itemBuilder: (_, i) {
                   final ticket = tickets[i];
-                  final latestStatus = (ticket.latest_check_status ?? '')
+                  final rawLatestStatus = (ticket.latest_check_status ?? '')
                       .toUpperCase()
                       .trim();
+                  final latestStatus = rawLatestStatus == 'APPROVED'
+                    ? 'APPROVE'
+                    : rawLatestStatus == 'REJECTED'
+                    ? 'REJECT'
+                    : rawLatestStatus;
                   final isPendingCheck = latestStatus == 'PENDING';
+                  final isFinalChecked =
+                    latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
-                  final isChecked = hasManagerCheck && !isPendingCheck;
+                  final isChecked = hasManagerCheck && isFinalChecked;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -120,7 +139,7 @@ class _SpTiketManagerPKPageState extends State<SpTiketManagerPKPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                "Already checked: ${ticket.latest_check_status ?? 'DONE'}",
+                                "Already checked: ${latestStatus.isNotEmpty ? latestStatus : 'DONE'}",
                               ),
                               backgroundColor: Colors.orange,
                             ),
@@ -178,8 +197,9 @@ class _SpTiketManagerPKPageState extends State<SpTiketManagerPKPage> {
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          ticket.latest_check_status ??
-                                              "Checked",
+                                          latestStatus.isNotEmpty
+                                              ? latestStatus
+                                              : "Checked",
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.grey.shade700,
@@ -246,6 +266,7 @@ class _ManagerSamplingCheckInputPage extends StatefulWidget {
 class _ManagerSamplingCheckInputPageState
     extends State<_ManagerSamplingCheckInputPage> {
   ManagerCheckDetail? detail;
+  Map<String, dynamic>? operatorSamplingData;
   bool isLoading = true;
   bool isSubmitting = false;
 
@@ -288,9 +309,42 @@ class _ManagerSamplingCheckInputPageState
         registrationId,
         "sampling",
       );
+
+      Map<String, dynamic>? fallbackSamplingData;
+      final managerSamplingData = res.data?.sampling_data;
+      final managerSamplingDataEmpty =
+          managerSamplingData == null || managerSamplingData.isEmpty;
+
+      if (managerSamplingDataEmpty) {
+        try {
+          final sampleRes = await api.getQcSamplingPkSample(
+            "Bearer ${widget.token}",
+            registrationId,
+          );
+          final records = sampleRes.data?.sampling_records ?? [];
+          if (records.isNotEmpty) {
+            final sorted = [...records]
+              ..sort((a, b) => (a.counter).compareTo(b.counter));
+            final latest = sorted.last;
+            fallbackSamplingData = {
+              'counter': latest.counter,
+              'kernel_dirt': latest.kernel_dirt,
+              'oil_content_estimate': latest.oil_content_estimate,
+              'sampled_by': latest.sampled_by,
+              'sampled_at': latest.sampled_at,
+            };
+          }
+        } catch (_) {
+          fallbackSamplingData = null;
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         detail = res.data;
+        operatorSamplingData = managerSamplingDataEmpty
+            ? fallbackSamplingData
+            : managerSamplingData;
         isLoading = false;
       });
     } catch (e) {
@@ -519,23 +573,23 @@ class _ManagerSamplingCheckInputPageState
                           const Divider(),
                           _readOnlyField(
                             "Counter (Resample)",
-                            "${detail?.sampling_data?['counter'] ?? '-'}",
+                            "${operatorSamplingData?['counter'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Kernel Dirt",
-                            "${detail?.sampling_data?['kernel_dirt'] ?? '-'}",
+                            "${operatorSamplingData?['kernel_dirt'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Oil Content Estimate",
-                            "${detail?.sampling_data?['oil_content_estimate'] ?? '-'}",
+                            "${operatorSamplingData?['oil_content_estimate'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Sampled By",
-                            "${detail?.sampling_data?['sampled_by'] ?? '-'}",
+                            "${operatorSamplingData?['sampled_by'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Sampled At",
-                            "${detail?.sampling_data?['sampled_at'] ?? '-'}",
+                            "${operatorSamplingData?['sampled_at'] ?? '-'}",
                           ),
                         ],
                       ),

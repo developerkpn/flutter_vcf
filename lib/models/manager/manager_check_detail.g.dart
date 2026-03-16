@@ -18,8 +18,17 @@ ManagerCheckDetail _$ManagerCheckDetailFromJson(Map<String, dynamic> json) =>
       requested_stage: json['requested_stage'] as String?,
       current_stage: json['current_stage'] as String?,
       sampling_data: json['sampling_data'] as Map<String, dynamic>?,
+      sampling_records: (json['sampling_records'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList(),
       lab_data: json['lab_data'] as Map<String, dynamic>?,
+      lab_records: (json['lab_records'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList(),
       unloading_data: json['unloading_data'] as Map<String, dynamic>?,
+      pk_cycle_records: (json['pk_cycle_records'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList(),
       manager_checks: (json['manager_checks'] as List<dynamic>?)
           ?.map((e) => ManagerCheck.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -37,7 +46,10 @@ Map<String, dynamic> _$ManagerCheckDetailToJson(ManagerCheckDetail instance) =>
       'requested_stage': instance.requested_stage,
       'current_stage': instance.current_stage,
       'sampling_data': instance.sampling_data,
+      'sampling_records': instance.sampling_records,
       'lab_data': instance.lab_data,
+      'lab_records': instance.lab_records,
       'unloading_data': instance.unloading_data,
+      'pk_cycle_records': instance.pk_cycle_records,
       'manager_checks': instance.manager_checks,
     };

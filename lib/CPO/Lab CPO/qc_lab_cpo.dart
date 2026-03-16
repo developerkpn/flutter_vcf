@@ -41,11 +41,17 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
 
     try {
       final token = await getToken();
-      final res = await api.getQcLabCpoVehicles("Bearer $token");
+      final res = await api.getQcLabCpoVehicles(
+        "Bearer $token",
+        includeRejected: true,
+        includeCancel: true,
+      );
 
       final vehicles = (res.data ?? []).where((v) {
-        final regist = (v.regist_status ?? "").toLowerCase();
-        final labStatus = (v.lab_status ?? "").toLowerCase();
+        final regist = (v.regist_status ?? "").toLowerCase().trim();
+        final labStatus = (v.lab_status ?? "").toLowerCase().trim();
+        final isCancel =
+            _isCancelStatus(regist) || _isCancelStatus(v.lab_status);
 
         // tampilkan jika hasil lab sudah ada
         final isLabProcessed = [
@@ -59,6 +65,8 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
             regist.startsWith("qc_lab") ||
             regist == "unloading" ||
             regist == "random_check";
+
+        if (isCancel) return true;
 
         return (isValidRegist && isLabProcessed) || regist == "random_check";
       }).toList();
@@ -81,8 +89,11 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
         return Colors.green;
       case "hold":
         return Colors.orange;
+      case "cancel":
       case "rejected":
         return Colors.red;
+      case "pending_manager_approval":
+        return Colors.yellow.shade700;
       default:
         return Colors.grey;
     }
@@ -94,15 +105,51 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
         return Icons.check_circle_outline;
       case "hold":
         return Icons.pause_circle_outline;
+      case "cancel":
       case "rejected":
         return Icons.cancel_outlined;
+      case "pending_manager_approval":
+        return Icons.error_outline;
       default:
         return Icons.hourglass_bottom;
     }
   }
 
-  bool _isPendingManagerApproval(QcLabCpoVehicle v) {
-    return (v.regist_status ?? '').toLowerCase().trim() == 'random_check';
+  bool _isLabAdvancedAfterManagerApproval(String registStatus) {
+    return registStatus == 'unloading' ||
+        registStatus == 'wb_out' ||
+        registStatus.startsWith('unloading') ||
+        registStatus.startsWith('qc_reunloading') ||
+        registStatus.startsWith('qc_resampling');
+  }
+
+  bool _isCancelStatus(String? rawStatus) {
+    final value = (rawStatus ?? '').toLowerCase().trim();
+    return value.contains('cancel');
+  }
+
+  String _resolveDisplayStatus(QcLabCpoVehicle v) {
+    final regist = (v.regist_status ?? '').toLowerCase().trim();
+    final lab = (v.lab_status ?? '').toLowerCase().trim();
+
+    if (regist == 'random_check') return 'pending_manager_approval';
+
+    if (_isCancelStatus(regist) || _isCancelStatus(lab)) {
+      return 'cancel';
+    }
+
+    // Backend can keep lab_status=rejected while regist_status advances
+    // after manager approval. In that case show APPROVED in operator UI.
+    if (lab == 'rejected' && _isLabAdvancedAfterManagerApproval(regist)) {
+      return 'approved';
+    }
+
+    if (lab == 'rejected') {
+      return 'rejected';
+    }
+
+    if (lab.isNotEmpty) return lab;
+    return regist;
   }
 
   Future<void> _openAddPage() async {
@@ -152,21 +199,18 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
               itemCount: tickets.length,
               itemBuilder: (_, i) {
                 final t = tickets[i];
-                final status = (t.lab_status ?? "").toLowerCase();
-                final isPendingManagerApproval = _isPendingManagerApproval(t);
-                final statusColor = isPendingManagerApproval
-                    ? Colors.yellow.shade700
-                    : _statusColor(status);
-                final statusIcon = isPendingManagerApproval
-                    ? Icons.error_outline
-                    : _statusIcon(status);
-                final statusLabel = isPendingManagerApproval
+                final status = _resolveDisplayStatus(t);
+                final statusColor = _statusColor(status);
+                final statusIcon = _statusIcon(status);
+                final statusLabel = status == 'pending_manager_approval'
                     ? 'Pending Manager Approval'
+                    : status == 'cancel'
+                    ? 'CANCEL'
                     : status.toUpperCase();
 
                 return GestureDetector(
                   onTap: () {
-                    if (!isPendingManagerApproval && status == "hold") {
+                    if (status == "hold") {
                       _openEditPage(t);
                     }
                   },

@@ -30,6 +30,8 @@ LabDetailData _$LabDetailDataFromJson(Map<String, dynamic> json) =>
       iv: json['iv'] as String?,
       remarks: json['remarks'] as String?,
       status: json['status'] as String?,
+      testedAt: json['tested_at'] as String?,
+      testedBy: json['tested_by'] as String?,
     );
 
 Map<String, dynamic> _$LabDetailDataToJson(LabDetailData instance) =>
@@ -40,4 +42,6 @@ Map<String, dynamic> _$LabDetailDataToJson(LabDetailData instance) =>
       'iv': instance.iv,
       'remarks': instance.remarks,
       'status': instance.status,
+      'tested_at': instance.testedAt,
+      'tested_by': instance.testedBy,
     };

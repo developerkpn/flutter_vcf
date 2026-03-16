@@ -35,12 +35,37 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
   // ===========================
   // STATUS NORMALIZER
   // ===========================
-  String normalizedStatus(String? s) {
-    final v = (s ?? "").toLowerCase().trim();
-    if (v == "hold" || v == "unloading_hold") return "unloading_hold";
-    if (v == "random_check") return "random_check";
-    if (v == "approved" || v == "wb_out") return "wb_out";
-    return v;
+  String normalizedStatus(String? registStatus, String? unloadingStatus) {
+    final reg = (registStatus ?? "").toLowerCase().trim();
+    final unload = (unloadingStatus ?? "").toLowerCase().trim();
+    final hasRejectedStatus =
+        reg.contains("rejected") || unload.contains("rejected");
+
+    if (reg == "random_check") return "random_check";
+
+    if (reg.contains("cancel") || unload.contains("cancel")) {
+      return "cancel";
+    }
+
+    if (reg == "wb_out" || unload == "approved") return "wb_out";
+
+    // Manager-approved rejected flow can keep rejected flag in one field
+    // while registration already moves to wb_out.
+    if (hasRejectedStatus && reg == "wb_out") {
+      return "wb_out";
+    }
+
+    if (unload == "hold" ||
+        unload == "unloading_hold" ||
+        reg == "unloading_hold") {
+      return "unloading_hold";
+    }
+
+    if (hasRejectedStatus) {
+      return "rejected";
+    }
+
+    return unload.isNotEmpty ? unload : reg;
   }
 
   // ===========================
@@ -54,6 +79,8 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
         return "APPROVED";
       case "random_check":
         return "Pending Manager Approval";
+      case "cancel":
+        return "CANCEL";
       case "rejected":
         return "REJECTED";
       default:
@@ -69,6 +96,7 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
         return Colors.green;
       case "random_check":
         return Colors.yellow.shade700;
+      case "cancel":
       case "rejected":
         return Colors.red;
       default:
@@ -84,6 +112,7 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
         return Icons.check_circle_outline;
       case "random_check":
         return Icons.error_outline;
+      case "cancel":
       case "rejected":
         return Icons.cancel_outlined;
       default:
@@ -131,7 +160,12 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
       ),
 
       body: FutureBuilder<UnloadingCPOResponse>(
-        future: _getToken().then((t) => apiService.getPosts("Bearer $t")),
+        future: _getToken().then(
+          (t) => apiService.getPosts(
+            "Bearer $t",
+            includeRejected: true,
+          ),
+        ),
         builder: (context, snapshot) {
           // LOADING
           if (snapshot.connectionState != ConnectionState.done) {
@@ -148,14 +182,20 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
 
           final unloadingTrucks = trucks.where((e) {
             final normalized = normalizedStatus(
-              (e.unloading_status ?? "").isNotEmpty
-                  ? e.unloading_status
-                  : e.regist_status,
+              e.regist_status,
+              e.unloading_status,
             );
 
-            return normalized == "unloading_hold" ||
-                normalized == "wb_out" ||
-                normalized == "random_check";
+            if (normalized.isEmpty) return false;
+
+            // Keep unloading dashboard resilient to backend status variants.
+            if (normalized == "sampling" ||
+                normalized == "lab" ||
+                normalized == "unloading") {
+              return false;
+            }
+
+            return true;
           }).toList();
 
           if (unloadingTrucks.isEmpty) {
@@ -173,9 +213,8 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
               final t = unloadingTrucks[index];
 
               final status = normalizedStatus(
-                (t.unloading_status ?? "").isNotEmpty
-                    ? t.unloading_status
-                    : t.regist_status,
+                t.regist_status,
+                t.unloading_status,
               );
 
               return GestureDetector(

@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_detail.dart';
@@ -45,15 +45,26 @@ class _LbTiketManagerPOMEPageState extends State<LbTiketManagerPOMEPage> {
     setState(() => isLoading = true);
     try {
       final token = await getToken();
+      final rawToken = (token ?? widget.token).trim();
+      final authToken = rawToken.startsWith('Bearer ')
+          ? rawToken
+          : 'Bearer $rawToken';
       final res = await api.getManagerCheckTickets(
-        "Bearer $token",
+        authToken,
         "POME",
         stage: "lab",
       );
 
+      final randomStageTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: authToken,
+        stage: 'lab',
+        tickets: res.data ?? [],
+      );
+
       if (!mounted) return;
       setState(() {
-        tickets = res.data ?? [];
+        tickets = randomStageTickets;
         isLoading = false;
       });
     } catch (e) {
@@ -90,12 +101,19 @@ class _LbTiketManagerPOMEPageState extends State<LbTiketManagerPOMEPage> {
                 itemCount: tickets.length,
                 itemBuilder: (_, i) {
                   final ticket = tickets[i];
-                  final latestStatus = (ticket.latest_check_status ?? '')
+                  final rawLatestStatus = (ticket.latest_check_status ?? '')
                       .toUpperCase()
                       .trim();
+                  final latestStatus = rawLatestStatus == 'APPROVED'
+                      ? 'APPROVE'
+                      : rawLatestStatus == 'REJECTED'
+                      ? 'REJECT'
+                      : rawLatestStatus;
                   final isPendingCheck = latestStatus == 'PENDING';
+                  final isFinalChecked =
+                      latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
-                  final isChecked = hasManagerCheck && !isPendingCheck;
+                  final isChecked = hasManagerCheck && isFinalChecked;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -112,7 +130,7 @@ class _LbTiketManagerPOMEPageState extends State<LbTiketManagerPOMEPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                "Already checked: ${ticket.latest_check_status ?? 'DONE'}",
+                                "Already checked: ${latestStatus.isNotEmpty ? latestStatus : 'DONE'}",
                               ),
                               backgroundColor: Colors.orange,
                             ),
@@ -170,8 +188,9 @@ class _LbTiketManagerPOMEPageState extends State<LbTiketManagerPOMEPage> {
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          ticket.latest_check_status ??
-                                              "Checked",
+                                          latestStatus.isNotEmpty
+                                              ? latestStatus
+                                              : "Checked",
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.grey.shade700,
@@ -237,12 +256,10 @@ class _ManagerLabCheckInputPage extends StatefulWidget {
 
 class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   ManagerCheckDetail? detail;
+  Map<String, dynamic>? operatorLabData;
   bool isLoading = true;
   bool isSubmitting = false;
 
-  // POME only has FFA and Moisture (not DOBI, IV)
-  final TextEditingController ffaCtrl = TextEditingController();
-  final TextEditingController moistCtrl = TextEditingController();
   final TextEditingController remarksCtrl = TextEditingController();
 
   late ApiService api;
@@ -256,8 +273,6 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
 
   @override
   void dispose() {
-    ffaCtrl.dispose();
-    moistCtrl.dispose();
     remarksCtrl.dispose();
     super.dispose();
   }
@@ -282,9 +297,38 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         registrationId,
         "lab",
       );
+
+      Map<String, dynamic>? fallbackLabData;
+      final managerLabData = res.data?.lab_data;
+      final managerLabDataEmpty =
+          managerLabData == null || managerLabData.isEmpty;
+
+      if (managerLabDataEmpty) {
+        try {
+          final labRes = await api.getLabPomeDetail(
+            "Bearer ${widget.token}",
+            registrationId,
+          );
+          final data = labRes.data;
+          if (data != null) {
+            fallbackLabData = {
+              'ffa': data.ffa,
+              'moisture': data.moisture,
+              'tested_by': data.testedBy,
+              'tested_at': data.testedAt,
+            };
+          }
+        } catch (_) {
+          fallbackLabData = null;
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         detail = res.data;
+        operatorLabData = managerLabDataEmpty
+            ? fallbackLabData
+            : managerLabData;
         isLoading = false;
       });
     } catch (e) {
@@ -297,11 +341,11 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   }
 
   Future<void> _submit(String status) async {
-    // Validate required fields (POME: FFA and Moisture only)
-    if (ffaCtrl.text.isEmpty || moistCtrl.text.isEmpty) {
+    final registrationId = widget.ticket.registration_id?.trim();
+    if (registrationId == null || registrationId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("FFA and Moisture are required"),
+          content: Text('Registration ID tidak ditemukan'),
           backgroundColor: Colors.red,
         ),
       );
@@ -312,12 +356,9 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
 
     try {
       await api.submitManagerLabCheck("Bearer ${widget.token}", {
-        "process_id": widget.ticket.process_id,
-        "check_status": status,
-        "remarks": remarksCtrl.text,
-        "mgr_ffa": double.parse(ffaCtrl.text),
-        "mgr_moisture": double.parse(moistCtrl.text),
-        // POME does NOT have mgr_dobi or mgr_iv
+        'registration_id': registrationId,
+        'check_status': status.toUpperCase(),
+        'remarks': remarksCtrl.text.trim(),
       });
 
       if (!mounted) return;
@@ -349,15 +390,6 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
           backgroundColor: Colors.red,
         ),
       );
-    } on FormatException {
-      if (!mounted) return;
-      setState(() => isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Invalid number format"),
-          backgroundColor: Colors.red,
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
       setState(() => isSubmitting = false);
@@ -386,23 +418,6 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
             child: Text(value),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _numericField(String label, TextEditingController ctrl) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: ctrl,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-        ],
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
       ),
     );
   }
@@ -476,19 +491,19 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
                           const Divider(),
                           _readOnlyField(
                             "FFA",
-                            "${detail?.lab_data?['ffa'] ?? '-'}",
+                            "${operatorLabData?['ffa'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Moisture",
-                            "${detail?.lab_data?['moisture'] ?? '-'}",
+                            "${operatorLabData?['moisture'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Tested By",
-                            "${detail?.lab_data?['tested_by'] ?? '-'}",
+                            "${operatorLabData?['tested_by'] ?? '-'}",
                           ),
                           _readOnlyField(
                             "Tested At",
-                            "${detail?.lab_data?['tested_at'] ?? '-'}",
+                            "${operatorLabData?['tested_at'] ?? '-'}",
                           ),
                         ],
                       ),
@@ -497,7 +512,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
 
                   const SizedBox(height: 16),
 
-                  // Manager Input Fields Card (POME: FFA & Moisture only)
+                  // Manager review info (operator values are read-only)
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -505,15 +520,20 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "Manager Lab Values",
+                            "Verifikasi Manager",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                           ),
                           const Divider(),
-                          _numericField("Manager FFA", ffaCtrl),
-                          _numericField("Manager Moisture", moistCtrl),
+                          Text(
+                            "Nilai operator bersifat read-only. Manager hanya pilih APPROVE/REJECT dan isi remarks bila perlu.",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
                         ],
                       ),
                     ),

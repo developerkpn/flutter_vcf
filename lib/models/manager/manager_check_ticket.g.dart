@@ -31,11 +31,17 @@ ManagerCheckTicket _$ManagerCheckTicketFromJson(Map<String, dynamic> json) =>
       driver_name: json['driver_name'] as String?,
       vendor_name: json['vendor_name'] as String?,
       commodity_type: json['commodity_type'] as String?,
+      regist_status: json['regist_status'] as String?,
       current_stage: json['current_stage'] as String?,
       created_at: json['created_at'] as String?,
       has_manager_check: json['has_manager_check'] as bool?,
       manager_checks_count: (json['manager_checks_count'] as num?)?.toInt(),
       latest_check_status: json['latest_check_status'] as String?,
+      has_any_manager_check: json['has_any_manager_check'] as bool?,
+      manager_checks_count_overall:
+          (json['manager_checks_count_overall'] as num?)?.toInt(),
+      latest_manager_check_status_overall:
+          json['latest_manager_check_status_overall'] as String?,
       previous_checks: (json['previous_checks'] as List<dynamic>?)
           ?.map((e) => PreviousCheck.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -50,10 +56,15 @@ Map<String, dynamic> _$ManagerCheckTicketToJson(ManagerCheckTicket instance) =>
       'driver_name': instance.driver_name,
       'vendor_name': instance.vendor_name,
       'commodity_type': instance.commodity_type,
+      'regist_status': instance.regist_status,
       'current_stage': instance.current_stage,
       'created_at': instance.created_at,
       'has_manager_check': instance.has_manager_check,
       'manager_checks_count': instance.manager_checks_count,
       'latest_check_status': instance.latest_check_status,
+      'has_any_manager_check': instance.has_any_manager_check,
+      'manager_checks_count_overall': instance.manager_checks_count_overall,
+      'latest_manager_check_status_overall':
+          instance.latest_manager_check_status_overall,
       'previous_checks': instance.previous_checks,
     };

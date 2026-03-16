@@ -34,6 +34,12 @@ class CpoSamplingData {
   @JsonKey(name: 'visual_color')
   final String? visualColor;
 
+  @JsonKey(name: 'sampled_at')
+  final String? sampledAt;
+
+  @JsonKey(name: 'sampled_by')
+  final String? sampledBy;
+
   final List<CpoSamplingPhoto>? photos;
 
   CpoSamplingData({
@@ -41,6 +47,8 @@ class CpoSamplingData {
     this.registrationId,
     this.oilTemp,
     this.visualColor,
+    this.sampledAt,
+    this.sampledBy,
     this.photos,
   });
 

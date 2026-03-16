@@ -21,7 +21,13 @@ class LabDetailData {
   final String? dobi;
   final String? iv;
   final String? remarks;
-  final String? status; 
+  final String? status;
+
+  @JsonKey(name: "tested_at")
+  final String? testedAt;
+
+  @JsonKey(name: "tested_by")
+  final String? testedBy;
 
   LabDetailData({
     this.ffa,
@@ -30,6 +36,8 @@ class LabDetailData {
     this.iv,
     this.remarks,
     this.status,
+    this.testedAt,
+    this.testedBy,
   });
 
   factory LabDetailData.fromJson(Map<String, dynamic> json) =>

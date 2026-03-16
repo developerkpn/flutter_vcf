@@ -174,19 +174,33 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
 
   Future<int> _countSamplingData() async {
     try {
-      final res = await api.getQcSamplingPkSample(
-        "Bearer ${widget.token}",
-        widget.model.registrationId ?? "",
-      );
-      final d = res.data;
+      final registrationId = widget.model.registrationId ?? "";
+      if (registrationId.isEmpty) return 0;
 
-      return d?.sampling_records.length ?? 0;
+      final res = await _dio.get(
+        "/qc/sampling/pk/$registrationId",
+        options: Options(
+          headers: {"Authorization": "Bearer ${widget.token}"},
+        ),
+      );
+
+      final body = res.data;
+      if (body is! Map<String, dynamic>) return 0;
+
+      final data = body["data"];
+      if (data is! Map<String, dynamic>) return 0;
+
+      final records = data["sampling_records"];
+      if (records is List) return records.length;
+
+      final samplingCount = data["sampling_count"];
+      if (samplingCount is num) return samplingCount.toInt();
+      if (samplingCount is String) return int.tryParse(samplingCount) ?? 0;
+
+      return 0;
     } catch (e) {
-      if (!mounted) return 0;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error Count Sampling Data: $e")));
-      return 0; // Add this return statement
+      debugPrint("Error Count Sampling Data: $e");
+      return 0;
     }
   }
 
@@ -432,10 +446,6 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
         if (photos.isNotEmpty) "photos": photos,
       };
 
-      if (mounted) {
-        setState(() => unloadingStarted = true);
-      }
-
       final res = await api.submitUnloadingPk(
         "Bearer ${widget.token}",
         payload,
@@ -444,9 +454,10 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
       if (!mounted) return;
 
       if (res.success == true) {
+        final statusLabel = status == "hold" ? "RESAMPLING" : status.toUpperCase();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Unloading PK ${status.toUpperCase()} berhasil"),
+            content: Text("Unloading PK $statusLabel berhasil"),
           ),
         );
         Navigator.pop(context, {
@@ -476,17 +487,53 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   }
 
   Widget _initialPhotoThumb(String url) {
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        color: Colors.grey.shade300,
-        image: url.isNotEmpty
-            ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover)
-            : null,
+    return AspectRatio(
+      aspectRatio: 3 / 4,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: Colors.grey.shade300,
+          border: Border.all(color: Colors.black26),
+        ),
+        child: url.isEmpty
+            ? const Icon(Icons.image_not_supported)
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  color: Colors.white,
+                  alignment: Alignment.center,
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.broken_image, size: 20),
+                  ),
+                ),
+              ),
       ),
-      child: url.isEmpty ? const Icon(Icons.broken_image, size: 20) : null,
+    );
+  }
+
+  Future<void> _showPhotoPreviewDialog(String url) async {
+    final mq = MediaQuery.of(context).size;
+    await showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: SizedBox(
+          width: mq.width * 0.9,
+          height: mq.height * 0.75,
+          child: InteractiveViewer(
+            minScale: 0.8,
+            maxScale: 5,
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -613,33 +660,31 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
               _fieldReadOnly("Remarks", initialRemarks),
               const SizedBox(height: 12),
               if (_existingPhotos.isNotEmpty) ...[
-                SizedBox(
-                  height: 90,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _existingPhotos.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
-                    itemBuilder: (_, i) {
-                      final url = _existingPhotos[i];
-                      return GestureDetector(
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (_) => Dialog(
-                              child: InteractiveViewer(
-                                child: Image.network(
-                                  url,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (c, e, s) =>
-                                      const Icon(Icons.broken_image),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                        child: _initialPhotoThumb(url),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black26),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white,
+                  ),
+                  child: Row(
+                    children: List.generate(4, (i) {
+                      final hasPhoto = i < _existingPhotos.length;
+                      final url = hasPhoto ? _existingPhotos[i] : '';
+
+                      return Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(right: i < 3 ? 8 : 0),
+                          child: hasPhoto
+                              ? GestureDetector(
+                                  onTap: () => _showPhotoPreviewDialog(url),
+                                  child: _initialPhotoThumb(url),
+                                )
+                              : _initialPhotoThumb(url),
+                        ),
                       );
-                    },
+                    }),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -748,7 +793,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _btn(
-                    "Hold",
+                    "Resampling",
                     Colors.orange,
                     () => _confirmAndSubmit("hold"),
                     enabled: !disableHoldButton,
@@ -767,7 +812,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
             if (pageMode == 'hold_resampling') ...[
               const SizedBox(height: 8),
               Text(
-                "Mode: HOLD (RESAMPLING). Menunggu resampling & re-lab. Tidak dapat mengubah data.",
+                "Mode: RESAMPLING. Menunggu resampling & re-lab. Tidak dapat mengubah data.",
                 style: TextStyle(fontSize: baseFont - 1, color: Colors.black54),
               ),
             ],

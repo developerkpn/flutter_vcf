@@ -40,16 +40,24 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
 
     try {
       final token = await getToken();
-      final res = await api.getQcLabPkVehicles("Bearer $token");
+      final res = await api.getQcLabPkVehicles(
+        "Bearer $token",
+        includeRejected: true,
+        includeCancel: true,
+      );
 
       final vehicles = (res.data ?? []).where((v) {
-        final status = (v.labStatus ?? "").toLowerCase();
+        final status = (v.labStatus ?? "").toLowerCase().trim();
         final isRelab = v.isRelab == true;
         final registStatus = (v.registStatus ?? '').toLowerCase().trim();
         final isRelabStage = isRelab || registStatus.startsWith('qc_relab');
+        final isCancel =
+            _isCancelStatus(registStatus) || _isCancelStatus(v.labStatus);
 
         final processed = ["approved", "rejected", "hold"].contains(status);
         final isRandomCheck = !isRelabStage && registStatus == 'random_check';
+
+        if (isCancel) return true;
 
         if (!isRelabStage && (processed || isRandomCheck)) return true;
 
@@ -68,6 +76,18 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
     }
   }
 
+  bool _isLabAdvancedAfterManagerApproval(String registStatus) {
+    return registStatus == 'unloading' ||
+        registStatus == 'wb_out' ||
+        registStatus.startsWith('qc_reunloading') ||
+        registStatus.startsWith('qc_resampling');
+  }
+
+  bool _isCancelStatus(String? rawStatus) {
+    final value = (rawStatus ?? '').toLowerCase().trim();
+    return value.contains('cancel');
+  }
+
   String getPkStatus(QcLabPkVehicle v) {
     final lab = (v.labStatus ?? "").toLowerCase();
     final regist = (v.registStatus ?? '').toLowerCase().trim();
@@ -75,6 +95,18 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
 
     if (!isRelabStage && regist == 'random_check') {
       return 'pending_manager_approval';
+    }
+
+    if (_isCancelStatus(regist) || _isCancelStatus(lab)) {
+      return 'cancel';
+    }
+
+    if (lab == 'rejected' && _isLabAdvancedAfterManagerApproval(regist)) {
+      return 'approved';
+    }
+
+    if (lab == 'rejected') {
+      return 'rejected';
     }
 
     if (["approved", "hold", "rejected"].contains(lab)) {
@@ -98,6 +130,8 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
     switch (s) {
       case 'pending_manager_approval':
         return 'Pending Manager Approval';
+      case 'cancel':
+        return 'CANCEL';
       case 'resampling_1':
         return 'RE-LAB 1';
       case 'resampling_2':
@@ -113,6 +147,7 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
         return Colors.green;
       case "hold":
         return Colors.orange;
+      case "cancel":
       case "rejected":
         return Colors.red;
       case "resampling_1":
@@ -131,6 +166,7 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
         return Icons.check_circle_outline;
       case "hold":
         return Icons.pause_circle_outline;
+      case "cancel":
       case "rejected":
         return Icons.cancel_outlined;
       case "resampling_1":

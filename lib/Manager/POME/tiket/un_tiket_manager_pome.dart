@@ -1,12 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_detail.dart';
 import 'package:flutter_vcf/models/manager/manager_check_ticket.dart';
-import 'package:flutter_vcf/models/manager/response/manager_check_detail_response.dart';
-import 'package:flutter_vcf/models/master/response/master_hole_response.dart';
-import 'package:flutter_vcf/models/master/response/master_tank_response.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UnTiketManagerPOMEPage extends StatefulWidget {
@@ -47,14 +45,25 @@ class _UnTiketManagerPOMEPageState extends State<UnTiketManagerPOMEPage> {
     setState(() => isLoading = true);
     try {
       final token = await getToken();
+      final rawToken = (token ?? widget.token).trim();
+      final authToken = rawToken.startsWith('Bearer ')
+          ? rawToken
+          : 'Bearer $rawToken';
       final res = await api.getManagerCheckTickets(
-        "Bearer $token",
+        authToken,
         "POME",
         stage: "unloading",
       );
 
+      final randomStageTickets = await filterRandomCheckTicketsByStage(
+        api: api,
+        authorizationToken: authToken,
+        stage: 'unloading',
+        tickets: res.data ?? [],
+      );
+
       setState(() {
-        tickets = res.data ?? [];
+        tickets = randomStageTickets;
         isLoading = false;
       });
     } catch (e) {
@@ -90,12 +99,19 @@ class _UnTiketManagerPOMEPageState extends State<UnTiketManagerPOMEPage> {
                 itemCount: tickets.length,
                 itemBuilder: (_, i) {
                   final ticket = tickets[i];
-                  final latestStatus = (ticket.latest_check_status ?? '')
+                  final rawLatestStatus = (ticket.latest_check_status ?? '')
                       .toUpperCase()
                       .trim();
+                  final latestStatus = rawLatestStatus == 'APPROVED'
+                      ? 'APPROVE'
+                      : rawLatestStatus == 'REJECTED'
+                      ? 'REJECT'
+                      : rawLatestStatus;
                   final isPendingCheck = latestStatus == 'PENDING';
+                  final isFinalChecked =
+                      latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
-                  final isChecked = hasManagerCheck && !isPendingCheck;
+                  final isChecked = hasManagerCheck && isFinalChecked;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(
@@ -112,7 +128,7 @@ class _UnTiketManagerPOMEPageState extends State<UnTiketManagerPOMEPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                "Already checked: ${ticket.latest_check_status ?? 'DONE'}",
+                                "Already checked: ${latestStatus.isNotEmpty ? latestStatus : 'DONE'}",
                               ),
                               backgroundColor: Colors.orange,
                             ),
@@ -170,8 +186,9 @@ class _UnTiketManagerPOMEPageState extends State<UnTiketManagerPOMEPage> {
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          ticket.latest_check_status ??
-                                              "Checked",
+                                          latestStatus.isNotEmpty
+                                              ? latestStatus
+                                              : "Checked",
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.grey.shade700,
@@ -243,11 +260,6 @@ class _ManagerUnloadingCheckInputPageState
 
   final TextEditingController remarksCtrl = TextEditingController();
 
-  List<TankItem> tanks = [];
-  List<HoleItem> holes = [];
-  int? selectedTankId;
-  int? selectedHoleId;
-
   late ApiService api;
 
   @override
@@ -264,24 +276,29 @@ class _ManagerUnloadingCheckInputPageState
   }
 
   Future<void> _loadData() async {
-    try {
-      final futures = await Future.wait([
-        api.getAllTanks("Bearer ${widget.token}"),
-        api.getAllHoles("Bearer ${widget.token}"),
-        api.getManagerCheckTicketDetail(
-          "Bearer ${widget.token}",
-          widget.ticket.registration_id!,
-          "unloading",
+    final registrationId = widget.ticket.registration_id;
+    if (registrationId == null) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Registration ID is missing"),
+          backgroundColor: Colors.red,
         ),
-      ]);
+      );
+      return;
+    }
 
-      final tankRes = futures[0] as MasterTankResponse;
-      final holeRes = futures[1] as MasterHoleResponse;
-      final detailRes = futures[2] as ManagerCheckDetailResponse;
+    try {
+      final detailRes = await api.getManagerCheckTicketDetail(
+        "Bearer ${widget.token}",
+        registrationId,
+        "unloading",
+      );
+
+      if (!mounted) return;
 
       setState(() {
-        tanks = tankRes.data;
-        holes = holeRes.data;
         detail = detailRes.data;
         isLoading = false;
       });
@@ -294,10 +311,11 @@ class _ManagerUnloadingCheckInputPageState
   }
 
   Future<void> _submit(String status) async {
-    if (selectedTankId == null || selectedHoleId == null) {
+    final registrationId = widget.ticket.registration_id?.trim();
+    if (registrationId == null || registrationId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Tank and Hole are required"),
+          content: Text('Registration ID tidak ditemukan'),
           backgroundColor: Colors.red,
         ),
       );
@@ -308,11 +326,9 @@ class _ManagerUnloadingCheckInputPageState
 
     try {
       await api.submitManagerUnloadingCheck("Bearer ${widget.token}", {
-        "process_id": widget.ticket.process_id,
-        "check_status": status,
-        "remarks": remarksCtrl.text,
-        "mgr_tank_id": selectedTankId,
-        "mgr_hole_id": selectedHoleId,
+        'registration_id': registrationId,
+        'check_status': status.toUpperCase(),
+        'remarks': remarksCtrl.text.trim(),
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -467,7 +483,7 @@ class _ManagerUnloadingCheckInputPageState
 
                   const SizedBox(height: 16),
 
-                  // Manager Input Fields Card
+                  // Manager review info (operator values are read-only)
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -475,47 +491,18 @@ class _ManagerUnloadingCheckInputPageState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "Manager Verification",
+                            "Verifikasi Manager",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                           ),
                           const Divider(),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<int>(
-                            value: selectedTankId,
-                            items: tanks
-                                .map(
-                                  (t) => DropdownMenuItem(
-                                    value: t.id,
-                                    child: Text(t.tank_name ?? 'Tank ${t.id}'),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => selectedTankId = v),
-                            decoration: const InputDecoration(
-                              labelText: 'Manager Tank',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<int>(
-                            value: selectedHoleId,
-                            items: holes
-                                .map(
-                                  (h) => DropdownMenuItem(
-                                    value: h.id,
-                                    child: Text(h.hole_name ?? 'Hole ${h.id}'),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => selectedHoleId = v),
-                            decoration: const InputDecoration(
-                              labelText: 'Manager Hole',
-                              border: OutlineInputBorder(),
+                          Text(
+                            "Data operator bersifat read-only. Manager hanya pilih APPROVE/REJECT dan isi remarks bila perlu.",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade700,
                             ),
                           ),
                         ],

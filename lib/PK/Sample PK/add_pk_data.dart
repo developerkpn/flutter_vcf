@@ -202,7 +202,7 @@ Widget _oldPhotoBox(QcSamplingPkPhoto p) {
   final fixedUrl = Uri.parse(url).toString();
 
   return ClipRRect(
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: BorderRadius.circular(10),
     child: FutureBuilder<Uint8List?>(
       future: _fetchImageBytes(fixedUrl),
       builder: (context, snap) {
@@ -217,7 +217,11 @@ Widget _oldPhotoBox(QcSamplingPkPhoto p) {
 
         final bytes = snap.data;
         if (bytes != null && bytes.isNotEmpty) {
-          return Image.memory(bytes, fit: BoxFit.cover);
+          return Container(
+            color: Colors.white,
+            alignment: Alignment.center,
+            child: Image.memory(bytes, fit: BoxFit.contain),
+          );
         }
 
         return const Icon(Icons.broken_image);
@@ -296,27 +300,27 @@ Future<void> _reloadPhotosForCounter(int counter) async {
 
     return GestureDetector(
       onTap: enabled ? () => pickPhoto(index) : null,
-      child: Container(
-        width: 70,
-        height: 100,
-        margin: const EdgeInsets.symmetric(horizontal: 3),
-        decoration: BoxDecoration(
-          color: enabled ? Colors.white : Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: enabled ? Colors.grey.shade400 : Colors.grey.shade500,
+      child: AspectRatio(
+        aspectRatio: 3 / 4,
+        child: Container(
+          decoration: BoxDecoration(
+            color: enabled ? Colors.white : Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: enabled ? Colors.grey.shade400 : Colors.grey.shade500,
+            ),
           ),
+          child: img == null
+              ? Icon(
+                  Icons.camera_alt,
+                  size: 24,
+                  color: enabled ? Colors.black54 : Colors.grey.shade600,
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.file(img, fit: BoxFit.cover),
+                ),
         ),
-        child: img == null
-            ? Icon(
-                Icons.camera_alt,
-                size: 24,
-                color: enabled ? Colors.black54 : Colors.grey.shade600,
-              )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.file(img, fit: BoxFit.cover),
-              ),
       ),
     );
   }
@@ -475,18 +479,29 @@ Future<void> _reloadPhotosForCounter(int counter) async {
               border: Border.all(color: Colors.black26),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                childAspectRatio: 1,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-              ),
-              itemCount: photos.length,
-              itemBuilder: (_, i) => _oldPhotoBox(photos[i]),
+            child: Row(
+              children: List.generate(4, (i) {
+                final hasPhoto = i < photos.length;
+
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: i < 3 ? 8 : 0),
+                    child: AspectRatio(
+                      aspectRatio: 3 / 4,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.black26),
+                        ),
+                        child: hasPhoto
+                            ? _oldPhotoBox(photos[i])
+                            : const Icon(Icons.image_not_supported),
+                      ),
+                    ),
+                  ),
+                );
+              }),
             ),
           )
         else if (isActiveEditable)
@@ -498,12 +513,14 @@ Future<void> _reloadPhotosForCounter(int counter) async {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _photoBoxPK(0, enableCapture),
-                _photoBoxPK(1, enableCapture),
-                _photoBoxPK(2, enableCapture),
-                _photoBoxPK(3, enableCapture),
+                Expanded(child: _photoBoxPK(0, enableCapture)),
+                const SizedBox(width: 8),
+                Expanded(child: _photoBoxPK(1, enableCapture)),
+                const SizedBox(width: 8),
+                Expanded(child: _photoBoxPK(2, enableCapture)),
+                const SizedBox(width: 8),
+                Expanded(child: _photoBoxPK(3, enableCapture)),
               ],
             ),
           )
