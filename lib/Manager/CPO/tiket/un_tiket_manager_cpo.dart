@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
+import 'package:flutter_vcf/Manager/widgets/operator_photo_preview_section.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_detail.dart';
@@ -122,7 +123,6 @@ class _UnTiketManagerCPOPageState extends State<UnTiketManagerCPOPage> {
                       : rawLatestStatus == 'REJECTED'
                       ? 'REJECT'
                       : rawLatestStatus;
-                  final isPendingCheck = latestStatus == 'PENDING';
                   final isFinalChecked =
                       latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
@@ -327,6 +327,7 @@ class _ManagerUnloadingCheckInputPage extends StatefulWidget {
 class _ManagerUnloadingCheckInputPageState
     extends State<_ManagerUnloadingCheckInputPage> {
   ManagerCheckDetail? detail;
+  List<String> operatorPhotoSources = [];
   bool isLoading = true;
   bool isSubmitting = false;
 
@@ -368,10 +369,32 @@ class _ManagerUnloadingCheckInputPageState
         "unloading",
       );
 
+      final primaryPhotoSources = extractOperatorPhotoSources([
+        detailRes.data?.unloading_data,
+        detailRes.data?.pk_cycle_records,
+      ]);
+
+      var fallbackPhotoSources = <String>[];
+      if (primaryPhotoSources.isEmpty) {
+        try {
+          final unloadingRes = await api.getUnloadingCpoDetail(
+            "Bearer ${widget.token}",
+            registrationId,
+          );
+          fallbackPhotoSources = (unloadingRes.data?.photos ?? [])
+              .map((p) => p.url ?? p.path ?? '')
+              .where((s) => s.isNotEmpty)
+              .toList();
+        } catch (_) {}
+      }
+
       if (!mounted) return;
 
       setState(() {
         detail = detailRes.data;
+        operatorPhotoSources = primaryPhotoSources.isNotEmpty
+            ? primaryPhotoSources
+            : fallbackPhotoSources;
         isLoading = false;
       });
     } catch (e) {
@@ -558,6 +581,13 @@ class _ManagerUnloadingCheckInputPageState
                   ),
 
                   const SizedBox(height: 16),
+
+                  OperatorPhotoPreviewSection(
+                    photoSources: operatorPhotoSources,
+                  ),
+
+                  if (operatorPhotoSources.isNotEmpty)
+                    const SizedBox(height: 16),
 
                   // Manager review info (operator values are read-only)
                   Card(

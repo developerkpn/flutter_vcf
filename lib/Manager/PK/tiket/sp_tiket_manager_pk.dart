@@ -11,8 +11,7 @@ import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_ticket.dart';
 import 'package:flutter_vcf/models/manager/manager_check_detail.dart';
-import 'package:flutter_vcf/models/manager/response/manager_check_tickets_response.dart';
-import 'package:flutter_vcf/models/manager/response/manager_check_detail_response.dart';
+import 'package:flutter_vcf/Manager/widgets/operator_photo_preview_section.dart';
 
 class SpTiketManagerPKPage extends StatefulWidget {
   final String userId;
@@ -118,7 +117,6 @@ class _SpTiketManagerPKPageState extends State<SpTiketManagerPKPage> {
                     : rawLatestStatus == 'REJECTED'
                     ? 'REJECT'
                     : rawLatestStatus;
-                  final isPendingCheck = latestStatus == 'PENDING';
                   final isFinalChecked =
                     latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
@@ -267,6 +265,7 @@ class _ManagerSamplingCheckInputPageState
     extends State<_ManagerSamplingCheckInputPage> {
   ManagerCheckDetail? detail;
   Map<String, dynamic>? operatorSamplingData;
+  List<String> operatorPhotoSources = [];
   bool isLoading = true;
   bool isSubmitting = false;
 
@@ -311,6 +310,7 @@ class _ManagerSamplingCheckInputPageState
       );
 
       Map<String, dynamic>? fallbackSamplingData;
+        List<String> fallbackPhotoSources = [];
       final managerSamplingData = res.data?.sampling_data;
       final managerSamplingDataEmpty =
           managerSamplingData == null || managerSamplingData.isEmpty;
@@ -333,10 +333,41 @@ class _ManagerSamplingCheckInputPageState
               'sampled_by': latest.sampled_by,
               'sampled_at': latest.sampled_at,
             };
+              fallbackPhotoSources = latest.photos
+                  .map((p) => p.url)
+                  .where((s) => s.isNotEmpty)
+                  .toList();
           }
         } catch (_) {
           fallbackSamplingData = null;
         }
+      }
+
+      final primaryPhotoSources = managerSamplingDataEmpty
+          ? <String>[]
+          : extractOperatorPhotoSources([
+              managerSamplingData,
+              res.data?.sampling_records,
+              res.data?.pk_cycle_records,
+            ]);
+
+      if (fallbackPhotoSources.isEmpty && primaryPhotoSources.isEmpty) {
+        try {
+          final sampleRes = await api.getQcSamplingPkSample(
+            "Bearer ${widget.token}",
+            registrationId,
+          );
+            final records = sampleRes.data?.sampling_records ?? [];
+            if (records.isNotEmpty) {
+              final sorted = [...records]
+                ..sort((a, b) => (a.counter).compareTo(b.counter));
+              final latest = sorted.last;
+              fallbackPhotoSources = latest.photos
+                  .map((p) => p.url)
+                  .where((s) => s.isNotEmpty)
+                  .toList();
+            }
+        } catch (_) {}
       }
 
       if (!mounted) return;
@@ -345,6 +376,9 @@ class _ManagerSamplingCheckInputPageState
         operatorSamplingData = managerSamplingDataEmpty
             ? fallbackSamplingData
             : managerSamplingData;
+        operatorPhotoSources = primaryPhotoSources.isNotEmpty
+            ? primaryPhotoSources
+            : fallbackPhotoSources;
         isLoading = false;
       });
     } catch (e) {
@@ -597,6 +631,13 @@ class _ManagerSamplingCheckInputPageState
                   ),
 
                   const SizedBox(height: 16),
+
+                  OperatorPhotoPreviewSection(
+                    photoSources: operatorPhotoSources,
+                  ),
+
+                  if (operatorPhotoSources.isNotEmpty)
+                    const SizedBox(height: 16),
 
                   // Photo Capture Section
                   Card(

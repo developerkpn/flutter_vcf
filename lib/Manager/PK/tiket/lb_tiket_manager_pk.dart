@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
+import 'package:flutter_vcf/Manager/widgets/operator_photo_preview_section.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_detail.dart';
@@ -122,7 +123,6 @@ class _LbTiketManagerPKPageState extends State<LbTiketManagerPKPage> {
                       : rawLatestStatus == 'REJECTED'
                       ? 'REJECT'
                       : rawLatestStatus;
-                  final isPendingCheck = latestStatus == 'PENDING';
                   final isFinalChecked =
                       latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
@@ -327,6 +327,7 @@ class _ManagerLabCheckInputPage extends StatefulWidget {
 class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   ManagerCheckDetail? detail;
   Map<String, dynamic>? operatorLabData;
+  List<String> operatorPhotoSources = [];
   bool isLoading = true;
   bool isSubmitting = false;
 
@@ -369,6 +370,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
       );
 
       Map<String, dynamic>? fallbackLabData;
+        List<String> fallbackPhotoSources = [];
       final managerLabData = res.data?.lab_data;
       final managerLabDataEmpty =
           managerLabData == null || managerLabData.isEmpty;
@@ -393,10 +395,41 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
               'tested_by': latest.testedBy,
               'tested_at': latest.testedAt,
             };
+            fallbackPhotoSources = (latest.photos ?? [])
+                .map((p) => p.url ?? p.path ?? '')
+                .where((s) => s.isNotEmpty)
+                .toList();
           }
         } catch (_) {
           fallbackLabData = null;
         }
+      }
+
+      final primaryPhotoSources = managerLabDataEmpty
+          ? <String>[]
+          : extractOperatorPhotoSources([
+              managerLabData,
+              res.data?.lab_records,
+              res.data?.pk_cycle_records,
+            ]);
+
+      if (fallbackPhotoSources.isEmpty && primaryPhotoSources.isEmpty) {
+        try {
+          final labRes = await api.getLabPkDetail(
+            "Bearer ${widget.token}",
+            registrationId,
+          );
+          final records = labRes.data?.labRecords ?? [];
+          if (records.isNotEmpty) {
+            final sorted = [...records]
+              ..sort((a, b) => (a.counter ?? 0).compareTo(b.counter ?? 0));
+            final latest = sorted.last;
+            fallbackPhotoSources = (latest.photos ?? [])
+                .map((p) => p.url ?? p.path ?? '')
+                .where((s) => s.isNotEmpty)
+                .toList();
+          }
+        } catch (_) {}
       }
 
       if (!mounted) return;
@@ -405,6 +438,9 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         operatorLabData = managerLabDataEmpty
             ? fallbackLabData
             : managerLabData;
+        operatorPhotoSources = primaryPhotoSources.isNotEmpty
+            ? primaryPhotoSources
+            : fallbackPhotoSources;
         isLoading = false;
       });
     } catch (e) {
@@ -604,6 +640,13 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
                   ),
 
                   const SizedBox(height: 16),
+
+                  OperatorPhotoPreviewSection(
+                    photoSources: operatorPhotoSources,
+                  ),
+
+                  if (operatorPhotoSources.isNotEmpty)
+                    const SizedBox(height: 16),
 
                   // Manager review info (operator values are read-only)
                   Card(
