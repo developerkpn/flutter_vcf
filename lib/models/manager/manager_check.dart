@@ -24,7 +24,9 @@ class ManagerCheck {
   final double? mgr_dirt;
   @JsonKey(fromJson: _toDouble)
   final double? mgr_oil_content;
+  @JsonKey(fromJson: _toInt)
   final int? mgr_tank_id;
+  @JsonKey(fromJson: _toInt)
   final int? mgr_hole_id;
   final String? checked_at;
   final String? checked_by;
@@ -59,6 +61,13 @@ class ManagerCheck {
     if (value == null) return null;
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
     return null;
   }
 }

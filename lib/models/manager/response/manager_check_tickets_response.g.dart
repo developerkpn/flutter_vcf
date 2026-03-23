@@ -14,7 +14,7 @@ ManagerCheckTicketsResponse _$ManagerCheckTicketsResponseFromJson(
   data: (json['data'] as List<dynamic>?)
       ?.map((e) => ManagerCheckTicket.fromJson(e as Map<String, dynamic>))
       .toList(),
-  total: (json['total'] as num?)?.toInt(),
+  total: ManagerCheckTicketsResponse._toInt(json['total']),
 );
 
 Map<String, dynamic> _$ManagerCheckTicketsResponseToJson(

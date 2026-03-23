@@ -34,9 +34,11 @@ class ManagerCheckTicket {
   final String? current_stage;
   final String? created_at;
   final bool? has_manager_check;
+  @JsonKey(fromJson: _toInt)
   final int? manager_checks_count;
   final String? latest_check_status;
   final bool? has_any_manager_check;
+  @JsonKey(fromJson: _toInt)
   final int? manager_checks_count_overall;
   final String? latest_manager_check_status_overall;
   final List<PreviousCheck>? previous_checks;
@@ -64,4 +66,11 @@ class ManagerCheckTicket {
   factory ManagerCheckTicket.fromJson(Map<String, dynamic> json) =>
       _$ManagerCheckTicketFromJson(json);
   Map<String, dynamic> toJson() => _$ManagerCheckTicketToJson(this);
+
+  static int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
 }

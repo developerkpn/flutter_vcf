@@ -9,7 +9,7 @@ part of 'manager_check_photo.dart';
 ManagerCheckPhoto _$ManagerCheckPhotoFromJson(Map<String, dynamic> json) =>
     ManagerCheckPhoto(
       photo_id: json['photo_id'] as String?,
-      photo_sequence: (json['photo_sequence'] as num?)?.toInt(),
+      photo_sequence: ManagerCheckPhoto._toInt(json['photo_sequence']),
       photo_data: json['photo_data'] as String?,
     );
 

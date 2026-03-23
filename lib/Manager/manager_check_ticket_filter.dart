@@ -405,6 +405,62 @@ bool isManagerTicketForStage(ManagerCheckTicket ticket, String stage) {
   return false;
 }
 
+bool _matchesStageToken(String? stageToken, String stage) {
+  final normalizedStage = normalizeManagerCheckStage(stage);
+  final token = _normalizeStatusToken(stageToken);
+  if (token.isEmpty) return false;
+
+  if (token == _normalizeStatusToken(normalizedStage)) return true;
+
+  if (normalizedStage == 'lab') {
+    return token.contains('lab') ||
+        token.contains('relab') ||
+        token.contains('resampling');
+  }
+
+  if (normalizedStage == 'unloading') {
+    return token.contains('unloading') ||
+        token.contains('re_unloading') ||
+        token.contains('reunloading');
+  }
+
+  if (normalizedStage == 'sampling') {
+    return token.contains('sampling');
+  }
+
+  return false;
+}
+
+bool _matchesStageByDetail({
+  required String stage,
+  required ManagerCheckTicket ticket,
+  dynamic detail,
+}) {
+  final stageSignals = <String?>[
+    detail?.requested_stage?.toString(),
+    detail?.current_stage?.toString(),
+    ticket.current_stage,
+  ];
+
+  final hasAnyStageSignal = stageSignals.any(
+    (token) => _normalizeStatusToken(token).isNotEmpty,
+  );
+
+  if (!hasAnyStageSignal) {
+    // Strict mode for random-check queue: no stage signal means unknown stage,
+    // so skip to avoid leaking tickets into wrong manager stage pages.
+    return false;
+  }
+
+  for (final token in stageSignals) {
+    if (_matchesStageToken(token, stage)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool _isPkCycleAliasStageToken(String? stageToken, String stage) {
   final token = _normalizeStatusToken(stageToken);
   if (token.isEmpty) return false;
@@ -546,7 +602,7 @@ Future<List<ManagerCheckTicket>> filterRandomCheckTicketsByStage({
       : 'Bearer ${authorizationToken.trim()}';
 
   final candidates = dedupeManagerCheckTickets(
-    filterPendingManagerTicketsByStage(tickets, normalizedStage),
+    tickets.where((ticket) => isPendingManagerCheckTicket(ticket)).toList(),
   );
 
   final resolved = await Future.wait(
@@ -560,6 +616,15 @@ Future<List<ManagerCheckTicket>> filterRandomCheckTicketsByStage({
           identifier,
           normalizedStage,
         );
+
+        if (!_matchesStageByDetail(
+          stage: normalizedStage,
+          ticket: ticket,
+          detail: detail.data,
+        )) {
+          return null;
+        }
+
         final registStatus = (detail.data?.regist_status ?? '')
             .trim()
             .toLowerCase();

@@ -330,6 +330,10 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   bool isSubmitting = false;
 
   final TextEditingController remarksCtrl = TextEditingController();
+  final TextEditingController mgrFfaCtrl = TextEditingController();
+  final TextEditingController mgrMoistureCtrl = TextEditingController();
+  final TextEditingController mgrDobiCtrl = TextEditingController();
+  final TextEditingController mgrIvCtrl = TextEditingController();
 
   late ApiService api;
 
@@ -343,6 +347,10 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   @override
   void dispose() {
     remarksCtrl.dispose();
+    mgrFfaCtrl.dispose();
+    mgrMoistureCtrl.dispose();
+    mgrDobiCtrl.dispose();
+    mgrIvCtrl.dispose();
     super.dispose();
   }
 
@@ -440,11 +448,21 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
     setState(() => isSubmitting = true);
 
     try {
-      final requestData = {
+      final requestData = <String, dynamic>{
         'registration_id': registrationId,
         'check_status': status.toUpperCase(),
         'remarks': remarksCtrl.text.trim(),
       };
+
+      final mgrFfa = _toDoubleOrNull(mgrFfaCtrl.text);
+      final mgrMoisture = _toDoubleOrNull(mgrMoistureCtrl.text);
+      final mgrDobi = _toDoubleOrNull(mgrDobiCtrl.text);
+      final mgrIv = _toDoubleOrNull(mgrIvCtrl.text);
+
+      if (mgrFfa != null) requestData['mgr_ffa'] = mgrFfa;
+      if (mgrMoisture != null) requestData['mgr_moisture'] = mgrMoisture;
+      if (mgrDobi != null) requestData['mgr_dobi'] = mgrDobi;
+      if (mgrIv != null) requestData['mgr_iv'] = mgrIv;
 
       await api.submitManagerLabCheck("Bearer ${widget.token}", requestData);
 
@@ -507,6 +525,36 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         ],
       ),
     );
+  }
+
+  Widget _managerInputField(
+    String label,
+    TextEditingController controller,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          TextFormField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double? _toDoubleOrNull(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) return null;
+    return double.tryParse(normalized);
   }
 
   @override
@@ -614,7 +662,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
                   if (operatorPhotoSources.isNotEmpty)
                     const SizedBox(height: 16),
 
-                  // Manager review info (operator values are read-only)
+                  // Manager lab input
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -622,20 +670,20 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "Verifikasi Manager",
+                            "Input Manager Lab",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                           ),
                           const Divider(),
-                          Text(
-                            "Nilai operator bersifat read-only. Manager hanya pilih APPROVE/REJECT dan isi remarks bila perlu.",
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade700,
-                            ),
+                          _managerInputField("Manager FFA", mgrFfaCtrl),
+                          _managerInputField(
+                            "Manager Moisture",
+                            mgrMoistureCtrl,
                           ),
+                          _managerInputField("Manager DOBI", mgrDobiCtrl),
+                          _managerInputField("Manager IV", mgrIvCtrl),
                         ],
                       ),
                     ),
