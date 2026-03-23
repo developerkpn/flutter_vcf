@@ -27,6 +27,7 @@ class InputUnloadingCPOPage extends StatefulWidget {
 class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
   final TextEditingController remarksCtrl = TextEditingController();
   final double baseFont = 15;
+  static const bool _holdFeatureEnabled = false;
   bool disableHoldButton = false;
 
   File? _image1, _image2, _image3, _image4;
@@ -476,7 +477,12 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _btn("Hold", Colors.orange, () => _confirmAndSubmit("hold"), enabled: !disableHoldButton),
+              _btn(
+                "Hold",
+                Colors.orange,
+                () => _confirmAndSubmit("hold"),
+                enabled: _holdFeatureEnabled && !disableHoldButton,
+              ),
               _btn("Finish", Colors.blue, _confirmAndFinish),
               _btn("Reject", Colors.red, () => _confirmAndSubmit("rejected")),
             ],

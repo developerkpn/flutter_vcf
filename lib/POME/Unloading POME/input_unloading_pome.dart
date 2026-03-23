@@ -27,6 +27,7 @@ class InputUnloadingPOMEPage extends StatefulWidget {
 class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
   final TextEditingController remarksCtrl = TextEditingController();
   final double baseFont = 15;
+  static const bool _holdFeatureEnabled = false;
 
   bool disableHoldButton = false;
   bool unloadingStarted = false;
@@ -484,7 +485,7 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
                   "Hold",
                   Colors.orange,
                   () => _confirmAndSubmit("hold"),
-                  enabled: !disableHoldButton,
+                  enabled: _holdFeatureEnabled && !disableHoldButton,
                 ),
                 _btn(
                   "Finish",
