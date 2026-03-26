@@ -50,17 +50,13 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
   int? selectedTankId;
   int? selectedHoleId;
 
-  bool get _isFinishStage => widget.stage == UnloadingPOMEStage.finish;
-
   @override
   void initState() {
     super.initState();
     _dio = AppConfig.createDio(withLogging: true);
     api = ApiService(_dio);
 
-    if (!_isFinishStage) {
-      _loadMasterData();
-    }
+    _loadMasterData();
     _loadExistingUnloadingIfHold();
   }
 
@@ -179,7 +175,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
   }
 
   Future<bool> _startUnloading() async {
-    if (_isFinishStage) return true;
     if (_isHoldTicket()) return true;
     if (unloadingStarted) return true;
 
@@ -275,10 +270,10 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
     final payload = {
       "registration_id": widget.model.registration_id,
       "status": status,
+      "tank_id": selectedTankId,
+      "hole_id": selectedHoleId,
       "remarks": remarksCtrl.text.trim(),
-      if (!_isFinishStage && selectedTankId != null) "tank_id": selectedTankId,
-      if (!_isFinishStage && selectedHoleId != null) "hole_id": selectedHoleId,
-      if (!_isFinishStage && photos.isNotEmpty) "photos": photos,
+      if (photos.isNotEmpty) "photos": photos,
     };
 
     log(
@@ -339,10 +334,10 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
     final payload = {
       "registration_id": widget.model.registration_id,
       "status": "approved",
+      "tank_id": selectedTankId,
+      "hole_id": selectedHoleId,
       "remarks": remarksCtrl.text.trim(),
-      if (!_isFinishStage && selectedTankId != null) "tank_id": selectedTankId,
-      if (!_isFinishStage && selectedHoleId != null) "hole_id": selectedHoleId,
-      if (!_isFinishStage && photos.isNotEmpty) "photos": photos,
+      if (photos.isNotEmpty) "photos": photos,
     };
 
     log(
@@ -424,7 +419,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
             ...info.entries.map((e) => _fieldReadOnly(e.key, e.value)).toList(),
             const SizedBox(height: 12),
 
-            if (!_isFinishStage) ...[
             // Dropdown Tank
             DropdownButtonFormField<int>(
               value: selectedTankId,
@@ -474,7 +468,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
             ),
 
             const SizedBox(height: 12),
-            ],
 
             TextField(
               controller: remarksCtrl,
@@ -483,7 +476,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
               style: TextStyle(fontSize: baseFont),
             ),
 
-            if (!_isFinishStage) ...[
             const SizedBox(height: 12),
 
             CheckboxListTile(
@@ -528,33 +520,42 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
                   ],
                 ),
               ),
-            ],
 
             const SizedBox(height: 30),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (!_isFinishStage)
+            if (widget.stage == UnloadingPOMEStage.start)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                   _btn(
                     "Hold",
                     Colors.orange,
                     () => _confirmAndSubmit("hold"),
                     enabled: _holdFeatureEnabled && !disableHoldButton,
                   ),
-                _btn(
-                  "Approve",
-                  Colors.blue,
-                  _confirmAndFinish,
-                ),
-                if (!_isFinishStage)
+                  _btn(
+                    "Approve",
+                    Colors.blue,
+                    _confirmAndFinish,
+                  ),
                   _btn(
                     "Reject",
                     Colors.red,
                     () => _confirmAndSubmit("cancel"),
                   ),
-              ],
-            ),
+                ],
+              )
+            else
+              Center(
+                child: SizedBox(
+                  width: 140,
+                  child: _btn(
+                    "Approve",
+                    Colors.blue,
+                    _confirmAndFinish,
+                  ),
+                ),
+              ),
           ],
         ),
       ),

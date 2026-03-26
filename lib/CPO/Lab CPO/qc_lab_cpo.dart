@@ -60,10 +60,11 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
           "rejected",
         ].contains(labStatus);
 
-        // regist_status bisa 'qc_lab', 'qc_lab_hold', atau 'unloading'
+        // regist_status sesudah lab approve sekarang bisa lanjut ke
+        // start_unloading/finish_unloading/wb_out, bukan hanya unloading.
         final isValidRegist =
             regist.startsWith("qc_lab") ||
-            regist == "unloading" ||
+          _isLabAdvancedStatus(regist) ||
             regist == "random_check";
 
         if (isCancel) return true;
@@ -116,11 +117,22 @@ class _QCLabCPOPageState extends State<QCLabCPOPage> {
   }
 
   bool _isLabAdvancedAfterManagerApproval(String registStatus) {
-    return registStatus == 'unloading' ||
+    return _isLabAdvancedStatus(registStatus) ||
+        registStatus == 'unloading' ||
         registStatus == 'wb_out' ||
         registStatus.startsWith('unloading') ||
+        registStatus.startsWith('start_unloading') ||
+        registStatus.startsWith('finish_unloading') ||
         registStatus.startsWith('qc_reunloading') ||
         registStatus.startsWith('qc_resampling');
+  }
+
+  bool _isLabAdvancedStatus(String registStatus) {
+    return registStatus == 'start_unloading' ||
+        registStatus == 'finish_unloading' ||
+        registStatus == 'wb_out' ||
+        registStatus.startsWith('start_unloading') ||
+        registStatus.startsWith('finish_unloading');
   }
 
   bool _isCancelStatus(String? rawStatus) {

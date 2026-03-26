@@ -76,6 +76,45 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
     );
   }
 
+  Future<List<UnloadingCpoModel>> _fetchDashboardVehicles(String token) async {
+    if (widget.stage == UnloadingCPOStage.finish) {
+      final response = await _fetchVehicles(token);
+      return response.data ?? [];
+    }
+
+    final responses = await Future.wait([
+      apiService.getPosts(
+        token,
+        includeRejected: true,
+        includeCancel: true,
+      ),
+      apiService.getFinishUnloadingCpoVehicles(
+        token,
+        includeRejected: true,
+        includeCancel: true,
+        includeCompleted: true,
+      ),
+    ]);
+
+    final merged = <String, UnloadingCpoModel>{};
+
+    for (final item in responses[0].data ?? <UnloadingCpoModel>[]) {
+      final key = item.registration_id ?? item.wb_ticket_no ?? '';
+      if (key.isNotEmpty) {
+        merged[key] = item;
+      }
+    }
+
+    for (final item in responses[1].data ?? <UnloadingCpoModel>[]) {
+      final key = item.registration_id ?? item.wb_ticket_no ?? '';
+      if (key.isNotEmpty) {
+        merged[key] = item;
+      }
+    }
+
+    return merged.values.toList();
+  }
+
   String _normalize(String? value) => (value ?? '').toLowerCase().trim();
 
   String _itemStage(UnloadingCpoModel item) {
@@ -268,8 +307,8 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
           ),
         ],
       ),
-      body: FutureBuilder<UnloadingCPOResponse>(
-        future: _getToken().then((t) => _fetchVehicles('Bearer $t')),
+      body: FutureBuilder<List<UnloadingCpoModel>>(
+        future: _getToken().then((t) => _fetchDashboardVehicles('Bearer $t')),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -280,7 +319,7 @@ class _UnloadingCPOPageState extends State<UnloadingCPOPage> {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          final trucks = snapshot.data?.data ?? [];
+          final trucks = snapshot.data ?? [];
           _logDashboardVehicles('raw dashboard vehicles', trucks);
           final filtered = trucks.where(_shouldShowOnDashboard).toList();
           _logDashboardVehicles('filtered dashboard vehicles', filtered);

@@ -50,16 +50,12 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
   int? selectedTankId;
   int? selectedHoleId;
 
-  bool get _isFinishStage => widget.stage == UnloadingCPOStage.finish;
-
   @override
   void initState() {
     super.initState();
     _dio = AppConfig.createDio(withLogging: true);
     api = ApiService(_dio);
-    if (!_isFinishStage) {
-      _loadMasterData();
-    }
+    _loadMasterData();
     _loadExistingUnloadingIfHold();
   }
 
@@ -183,7 +179,6 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
 
   
   Future<bool> _startUnloading() async {
-    if (_isFinishStage) return true;
     if (_isHoldTicket()) return true;
     if (unloadingStarted) return true;
 
@@ -263,10 +258,10 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
     final payload = {
       "registration_id": widget.model.registration_id,
       "status": status,
+      "tank_id": selectedTankId,
+      "hole_id": selectedHoleId,
       "remarks": remarksCtrl.text.trim(),
-      if (!_isFinishStage && selectedTankId != null) "tank_id": selectedTankId,
-      if (!_isFinishStage && selectedHoleId != null) "hole_id": selectedHoleId,
-      if (!_isFinishStage && photos.isNotEmpty) "photos": photos,
+      if (photos.isNotEmpty) "photos": photos,
     };
 
     log(
@@ -325,10 +320,10 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
     final payload = {
       "registration_id": widget.model.registration_id,
       "status": "approved",
+      "tank_id": selectedTankId,
+      "hole_id": selectedHoleId,
       "remarks": remarksCtrl.text.trim(),
-      if (!_isFinishStage && selectedTankId != null) "tank_id": selectedTankId,
-      if (!_isFinishStage && selectedHoleId != null) "hole_id": selectedHoleId,
-      if (!_isFinishStage && photos.isNotEmpty) "photos": photos,
+      if (photos.isNotEmpty) "photos": photos,
     };
 
     log(
@@ -411,7 +406,6 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
         children: [
           ...info.entries.map((e) => _fieldReadOnly(e.key, e.value)).toList(),
           const SizedBox(height: 12),
-          if (!_isFinishStage) ...[
           DropdownButtonFormField<int>(
             value: selectedTankId,
             decoration: _dec("Pilih Tank"),
@@ -454,7 +448,6 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
             onChanged: isReadOnly ? null : (v) => setState(() => selectedHoleId = v),
           ),
           const SizedBox(height: 12),
-          ],
           TextField(
             controller: remarksCtrl,
             maxLines: 3,
@@ -462,7 +455,6 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
             style: TextStyle(fontSize: baseFont),
           ),
 
-          if (!_isFinishStage) ...[
           const SizedBox(height: 12),
           // if (_existingPhotos.isNotEmpty) ...[
           //   const Text("Foto yang sudah tersimpan:", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
@@ -531,25 +523,30 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
                 ],
               ),
             ),
-          ],
 
 
           const SizedBox(height: 30),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (!_isFinishStage)
+          if (widget.stage == UnloadingCPOStage.start)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 _btn(
                   "Hold",
                   Colors.orange,
                   () => _confirmAndSubmit("hold"),
                   enabled: _holdFeatureEnabled && !disableHoldButton,
                 ),
-              _btn("Approve", Colors.blue, _confirmAndFinish),
-              if (!_isFinishStage)
+                _btn("Approve", Colors.blue, _confirmAndFinish),
                 _btn("Reject", Colors.red, () => _confirmAndSubmit("cancel")),
-            ],
-          ),
+              ],
+            )
+          else
+            Center(
+              child: SizedBox(
+                width: 140,
+                child: _btn("Approve", Colors.blue, _confirmAndFinish),
+              ),
+            ),
         ],
       ),
     ));
