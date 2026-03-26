@@ -1,20 +1,24 @@
 import 'dart:developer';
-import 'package:dio/dio.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/response/unloading_cpo_response.dart';
+import 'package:flutter_vcf/models/unloading_cpo_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'input_unloading_cpo.dart';
+import 'unloading_cpo.dart';
 
 class AddUnloadingCPOPage extends StatefulWidget {
   final String userId;
   final String token;
+  final UnloadingCPOStage stage;
 
   const AddUnloadingCPOPage({
     super.key,
     required this.userId,
     required this.token,
+    this.stage = UnloadingCPOStage.start,
   });
 
   @override
@@ -22,7 +26,7 @@ class AddUnloadingCPOPage extends StatefulWidget {
 }
 
 class _AddUnloadingCPOPageState extends State<AddUnloadingCPOPage> {
-  String? selectedPlat;
+  String? selectedRegistrationId;
 
   late Future<UnloadingCPOResponse> futureVehicles =
       Future.value(UnloadingCPOResponse(success: true, message: "", data: []));
@@ -40,19 +44,62 @@ class _AddUnloadingCPOPageState extends State<AddUnloadingCPOPage> {
 
   void _loadData() async {
     final token = await _getToken();
-    final apiService =
-        ApiService(AppConfig.createDio());
+    final apiService = ApiService(AppConfig.createDio());
 
     setState(() {
-      futureVehicles = apiService.getPosts("Bearer $token");
+      if (widget.stage == UnloadingCPOStage.start) {
+        futureVehicles = apiService.getPosts("Bearer $token");
+      } else {
+        futureVehicles = apiService.getFinishUnloadingCpoVehicles("Bearer $token");
+      }
     });
+  }
+
+  String _normalize(String? value) => (value ?? '').toLowerCase().trim();
+
+  String _itemStage(UnloadingCpoModel item) {
+    final stage = _normalize(item.stage);
+    if (stage.isNotEmpty) return stage;
+
+    final latestStatus = _normalize(item.latest_status);
+    if (latestStatus.isNotEmpty) return latestStatus;
+
+    return _normalize(item.regist_status);
+  }
+
+  bool _isReadyForCreate(UnloadingCpoModel item) {
+    final stage = _itemStage(item);
+    final unloadingStatus = _normalize(item.unloading_status);
+    final unloading2Status = _normalize(item.unloading_2_status);
+
+    if (widget.stage == UnloadingCPOStage.start) {
+      return (stage == widget.stage.mainStatus || stage == 'unloading') &&
+          unloadingStatus.isEmpty;
+    }
+
+    return stage == widget.stage.mainStatus && unloading2Status.isEmpty;
+  }
+
+  void _logVehicles(String source, List<UnloadingCpoModel> items) {
+    log(
+      '[CPO ${widget.stage.name}] $source count=${items.length}',
+      name: 'unloading_cpo_add',
+    );
+    for (final item in items) {
+      log(
+        '[CPO ${widget.stage.name}] regId=${item.registration_id} ticket=${item.wb_ticket_no} plate=${item.plate_number} '
+        'regist=${item.regist_status} latest=${item.latest_status} stage=${item.stage} '
+        'unload1=${item.unloading_status} unload2=${item.unloading_2_status}',
+        name: 'unloading_cpo_add',
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tambah Unloading CPO'),
+        title: Text(widget.stage.addTitle),
         backgroundColor: Colors.blue,
         actions: [
           IconButton(
@@ -74,31 +121,32 @@ class _AddUnloadingCPOPageState extends State<AddUnloadingCPOPage> {
           }
 
           final data = snapshot.data?.data ?? [];
+          _logVehicles('raw vehicles', data);
 
-          // ==========
-          // Show ONLY vehicles with regist_status = "unloading"
-          // ==========
-          final readyVehicles = data.where((e) {
-            final status = (e.regist_status ?? "").toLowerCase();
-            return status == "unloading";
-          }).toList();
+          final readyVehicles = data.where(_isReadyForCreate).toList();
+          _logVehicles('filtered ready vehicles', readyVehicles);
 
           // Unique plat
-          final uniquePlates =
-              readyVehicles.map((e) => e.plate_number).toSet().toList();
-
           if (readyVehicles.isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
-                "Tidak ada kendaraan yang siap unloading.",
+                widget.stage == UnloadingCPOStage.start
+                    ? "Tidak ada kendaraan yang siap Start Unloading."
+                    : "Tidak ada kendaraan yang siap Finish Unloading.",
                 style: TextStyle(color: Colors.black54, fontSize: 15),
               ),
             );
           }
 
           // reset selectedPlat if not valid after refresh
-          if (selectedPlat != null && !uniquePlates.contains(selectedPlat)) {
-            selectedPlat = null;
+          final validIds = readyVehicles
+              .map((e) => e.registration_id)
+              .whereType<String>()
+              .toSet();
+
+          if (selectedRegistrationId != null &&
+              !validIds.contains(selectedRegistrationId)) {
+            selectedRegistrationId = null;
           }
 
           return Padding(
@@ -107,7 +155,7 @@ class _AddUnloadingCPOPageState extends State<AddUnloadingCPOPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Silakan Pilih Plat Kendaraan yang Siap Unloading',
+                  'Silakan pilih plat kendaraan yang siap diproses',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 12),
@@ -117,18 +165,19 @@ class _AddUnloadingCPOPageState extends State<AddUnloadingCPOPage> {
                     border: OutlineInputBorder(),
                     labelText: 'Plat Kendaraan',
                   ),
-                  value: selectedPlat,
-                  items: uniquePlates.map((plate) {
-                    final item =
-                        readyVehicles.firstWhere((e) => e.plate_number == plate);
+                  value: selectedRegistrationId,
+                  items: readyVehicles.map((item) {
+                    final registrationId = item.registration_id ?? '';
 
                     return DropdownMenuItem(
-                      value: plate,
-                      child: Text("$plate (${item.wb_ticket_no})"),
+                      value: registrationId,
+                      child: Text(
+                        "${item.plate_number ?? '-'} (${item.wb_ticket_no ?? '-'})",
+                      ),
                     );
                   }).toList(),
                   onChanged: (value) {
-                    setState(() => selectedPlat = value);
+                    setState(() => selectedRegistrationId = value);
                   },
                 ),
 
@@ -145,14 +194,14 @@ class _AddUnloadingCPOPageState extends State<AddUnloadingCPOPage> {
                       ),
                     ),
                     label: const Text(
-                      "Lanjut ke Input Unloading",
+                      "Lanjut ke Input",
                       style: TextStyle(color: Colors.white, fontSize: 14),
                     ),
-                    onPressed: selectedPlat == null
+                    onPressed: selectedRegistrationId == null
                         ? null
                         : () async {
                             final kendaraan = readyVehicles.firstWhere(
-                              (item) => item.plate_number == selectedPlat,
+                              (item) => item.registration_id == selectedRegistrationId,
                             );
 
                             final result = await Navigator.push(
@@ -161,6 +210,7 @@ class _AddUnloadingCPOPageState extends State<AddUnloadingCPOPage> {
                                 builder: (_) => InputUnloadingCPOPage(
                                   model: kendaraan,
                                   token: widget.token,
+                                  stage: widget.stage,
                                 ),
                               ),
                             );

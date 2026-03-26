@@ -123,14 +123,45 @@ abstract class ApiService {
     @Path('identifier') String identifier,
   );
 
+  @GET('unloading_2/cpo/vehicles')
+  Future<UnloadingCPOResponse> getFinishUnloadingCpoVehicles(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+    @Query('include_completed') bool? includeCompleted,
+  });
+
+  @GET('unloading_2/cpo/history')
+  Future<UnloadingCPOResponse> getFinishUnloadingCpoHistory(
+    @Header('Authorization') String token,
+  );
+
+  @GET('unloading_2/cpo/{identifier}')
+  Future<UnloadingCPOResponse> getFinishUnloadingCpo(
+    @Header('Authorization') String token,
+    @Path('identifier') String identifier,
+  );
+
   @POST('unloading/cpo/create')
   Future<SubmitUnloadingResponse> submitUnloadingStatus(
     @Header('Authorization') String token,
     @Body() Map<String, dynamic> payload,
   );
 
+  @POST('unloading_2/cpo/create')
+  Future<SubmitUnloadingResponse> submitFinishUnloadingCpoStatus(
+    @Header('Authorization') String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
   @GET('unloading/cpo/{registrationId}')
   Future<UnloadingCpoDetailResponse> getUnloadingCpoDetail(
+    @Header("Authorization") String token,
+    @Path("registrationId") String registrationId,
+  );
+
+  @GET('unloading_2/cpo/{registrationId}')
+  Future<UnloadingCpoDetailResponse> getFinishUnloadingCpoDetail(
     @Header("Authorization") String token,
     @Path("registrationId") String registrationId,
   );
@@ -218,8 +249,34 @@ abstract class ApiService {
     @Path("registrationId") String registrationId,
   );
 
+  @GET("unloading_2/pome/vehicles")
+  Future<UnloadingPOMEResponse> getFinishUnloadingPomeData(
+    @Header("Authorization") String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+    @Query('include_completed') bool? includeCompleted,
+  }
+  );
+
+  @GET("unloading_2/pome/history")
+  Future<UnloadingPOMEResponse> getFinishUnloadingPomeHistory(
+    @Header("Authorization") String token,
+  );
+
+  @GET("unloading_2/pome/{registrationId}")
+  Future<UnloadingPomeDetailResponse> getFinishUnloadingPomeDetail(
+    @Header("Authorization") String token,
+    @Path("registrationId") String registrationId,
+  );
+
   @POST("unloading/pome/create")
   Future<SubmitUnloadingResponse> submitUnloadingPome(
+    @Header("Authorization") String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
+  @POST("unloading_2/pome/create")
+  Future<SubmitUnloadingResponse> submitFinishUnloadingPome(
     @Header("Authorization") String token,
     @Body() Map<String, dynamic> payload,
   );

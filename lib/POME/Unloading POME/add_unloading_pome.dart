@@ -1,20 +1,24 @@
 import 'dart:developer';
-import 'package:dio/dio.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
+import 'package:flutter_vcf/models/pome/unloading_pome_model.dart';
 import 'package:flutter_vcf/models/pome/response/unloading_pome_response.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'input_unloading_pome.dart';
+import 'unloading_pome.dart';
 
 class AddUnloadingPOMEPage extends StatefulWidget {
   final String userId;
   final String token;
+  final UnloadingPOMEStage stage;
 
   const AddUnloadingPOMEPage({
     super.key,
     required this.userId,
     required this.token,
+    this.stage = UnloadingPOMEStage.start,
   });
 
   @override
@@ -22,7 +26,7 @@ class AddUnloadingPOMEPage extends StatefulWidget {
 }
 
 class _AddUnloadingPOMEPageState extends State<AddUnloadingPOMEPage> {
-  String? selectedPlat;
+  String? selectedRegistrationId;
 
   late Future<UnloadingPOMEResponse> futureVehicles =
       Future.value(UnloadingPOMEResponse(success: true, message: "", data: []));
@@ -43,15 +47,59 @@ class _AddUnloadingPOMEPageState extends State<AddUnloadingPOMEPage> {
     final apiService = ApiService(AppConfig.createDio());
 
     setState(() {
-      futureVehicles = apiService.getUnloadingPomeData("Bearer $token");
+      if (widget.stage == UnloadingPOMEStage.start) {
+        futureVehicles = apiService.getUnloadingPomeData("Bearer $token");
+      } else {
+        futureVehicles = apiService.getFinishUnloadingPomeData("Bearer $token");
+      }
     });
+  }
+
+  String _normalize(String? value) => (value ?? '').toLowerCase().trim();
+
+  String _itemStage(UnloadingPomeModel item) {
+    final stage = _normalize(item.stage);
+    if (stage.isNotEmpty) return stage;
+
+    final latestStatus = _normalize(item.latest_status);
+    if (latestStatus.isNotEmpty) return latestStatus;
+
+    return _normalize(item.regist_status);
+  }
+
+  bool _isReadyForCreate(UnloadingPomeModel item) {
+    final stage = _itemStage(item);
+    final unloadingStatus = _normalize(item.unloading_status);
+    final unloading2Status = _normalize(item.unloading_2_status);
+
+    if (widget.stage == UnloadingPOMEStage.start) {
+      return (stage == widget.stage.mainStatus || stage == 'unloading') &&
+          unloadingStatus.isEmpty;
+    }
+
+    return stage == widget.stage.mainStatus && unloading2Status.isEmpty;
+  }
+
+  void _logVehicles(String source, List<UnloadingPomeModel> items) {
+    log(
+      '[POME ${widget.stage.name}] $source count=${items.length}',
+      name: 'unloading_pome_add',
+    );
+    for (final item in items) {
+      log(
+        '[POME ${widget.stage.name}] regId=${item.registration_id} ticket=${item.wb_ticket_no} plate=${item.plate_number} '
+        'regist=${item.regist_status} latest=${item.latest_status} stage=${item.stage} '
+        'unload1=${item.unloading_status} unload2=${item.unloading_2_status}',
+        name: 'unloading_pome_add',
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tambah Unloading POME'),
+        title: Text(widget.stage.addTitle),
         backgroundColor: Colors.blue,
         actions: [
           IconButton(
@@ -64,7 +112,7 @@ class _AddUnloadingPOMEPageState extends State<AddUnloadingPOMEPage> {
       body: FutureBuilder<UnloadingPOMEResponse>(
         future: futureVehicles,
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+          if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -73,30 +121,31 @@ class _AddUnloadingPOMEPageState extends State<AddUnloadingPOMEPage> {
           }
 
           final data = snapshot.data?.data ?? [];
+          _logVehicles('raw vehicles', data);
 
-          // Filter kendaraan dengan status "unloading"
-          final readyVehicles = data.where((e) =>
-              (e.regist_status ?? "").toLowerCase() == "unloading"
-          ).toList();
+          final readyVehicles = data.where(_isReadyForCreate).toList();
+          _logVehicles('filtered ready vehicles', readyVehicles);
 
           // Ambil plat 
-          final uniquePlates = readyVehicles
-              .map((e) => e.plate_number)
-              .toSet()
-              .toList();
-
-          // Reset dropdown kalau plat hilang
-          if (selectedPlat != null && !uniquePlates.contains(selectedPlat)) {
-            selectedPlat = null;
-          }
-
           if (readyVehicles.isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
-                "Tidak ada kendaraan yang siap unloading POME.",
+                widget.stage == UnloadingPOMEStage.start
+                    ? "Tidak ada kendaraan yang siap Start Unloading POME."
+                    : "Tidak ada kendaraan yang siap Finish Unloading POME.",
                 style: TextStyle(color: Colors.black54),
               ),
             );
+          }
+
+          final validIds = readyVehicles
+              .map((e) => e.registration_id)
+              .whereType<String>()
+              .toSet();
+
+          if (selectedRegistrationId != null &&
+              !validIds.contains(selectedRegistrationId)) {
+            selectedRegistrationId = null;
           }
 
           return Padding(
@@ -105,7 +154,7 @@ class _AddUnloadingPOMEPageState extends State<AddUnloadingPOMEPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Silakan Pilih Plat Kendaraan yang Siap Unloading POME',
+                  'Silakan pilih plat kendaraan yang siap diproses',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
@@ -115,15 +164,17 @@ class _AddUnloadingPOMEPageState extends State<AddUnloadingPOMEPage> {
                     border: OutlineInputBorder(),
                     labelText: 'Plat Kendaraan',
                   ),
-                  value: selectedPlat,
-                  items: uniquePlates.map((plate) {
-                    final v = readyVehicles.firstWhere((e) => e.plate_number == plate);
+                  value: selectedRegistrationId,
+                  items: readyVehicles.map((item) {
+                    final registrationId = item.registration_id ?? '';
                     return DropdownMenuItem(
-                      value: plate,
-                      child: Text("$plate (${v.wb_ticket_no})"),
+                      value: registrationId,
+                      child: Text(
+                        "${item.plate_number ?? '-'} (${item.wb_ticket_no ?? '-'})",
+                      ),
                     );
                   }).toList(),
-                  onChanged: (value) => setState(() => selectedPlat = value),
+                  onChanged: (value) => setState(() => selectedRegistrationId = value),
                 ),
 
                 const SizedBox(height: 25),
@@ -136,14 +187,14 @@ class _AddUnloadingPOMEPageState extends State<AddUnloadingPOMEPage> {
                     ),
                     icon: const Icon(Icons.arrow_forward, color: Colors.white),
                     label: const Text(
-                      "Lanjut ke Input Unloading",
+                      "Lanjut ke Input",
                       style: TextStyle(color: Colors.white),
                     ),
-                    onPressed: selectedPlat == null
+                    onPressed: selectedRegistrationId == null
                         ? null
                         : () async {
                             final kendaraan = readyVehicles.firstWhere(
-                              (item) => item.plate_number == selectedPlat,
+                              (item) => item.registration_id == selectedRegistrationId,
                             );
 
                             final result = await Navigator.push(
@@ -152,6 +203,7 @@ class _AddUnloadingPOMEPageState extends State<AddUnloadingPOMEPage> {
                                 builder: (_) => InputUnloadingPOMEPage(
                                   model: kendaraan,
                                   token: widget.token,
+                                  stage: widget.stage,
                                 ),
                               ),
                             );

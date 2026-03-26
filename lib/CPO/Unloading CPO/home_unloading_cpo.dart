@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import '../../login.dart';
@@ -60,7 +59,7 @@ class _HomeUnloadingCPOPageState extends State<HomeUnloadingCPOPage> {
     setState(() {
       totalMasuk = stats?.total_truk_masuk ?? 0;
       belumUnloading = stats?.truk_belum_unloading ?? 0;
-      sudahUnloading = stats?.truk_sudah_unloading ?? 0;
+      sudahUnloading = stats?.total_truk_keluar ?? stats?.truk_sudah_unloading ?? 0;
       totalKeluar = stats?.total_truk_keluar ?? 0;
       lastUpdate = period?.to ?? "-";
       isLoading = false;
@@ -79,49 +78,50 @@ class _HomeUnloadingCPOPageState extends State<HomeUnloadingCPOPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Text("Home VCF", style: TextStyle(color: Colors.white)),
-            const SizedBox(width: 5),
-
-            // Dropdown Navigasi
-            DropdownButton<String>(
-              dropdownColor: Colors.blue[100],
-              icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-              underline: const SizedBox(),
-              value: null,
-              hint: const SizedBox(),
-              onChanged: (String? newValue) {
-                if (newValue == "CPO") {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => UnloadingCPOPage(
-                        userId: widget.userId,
-                        token: widget.token,
-                      ),
-                    ),
-                  );
-                }
-              },
-              items: const [
-                DropdownMenuItem<String>(
-                  enabled: false,
-                  child: Row(
-                    children: [
-                      Text("Unloading", style: TextStyle(fontWeight: FontWeight.bold)),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_drop_down, size: 16),
-                    ],
-                  ),
-                ),
-                DropdownMenuItem<String>(value: "CPO", child: Text("CPO")),
-              ],
-            ),
-          ],
-        ),
+        title: const Text("Home VCF", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.blue,
         actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.arrow_drop_down_circle_outlined),
+            tooltip: 'Pilih menu unloading',
+            onSelected: (String value) {
+              if (value == 'START_CPO') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UnloadingCPOPage(
+                      userId: widget.userId,
+                      token: widget.token,
+                      stage: UnloadingCPOStage.start,
+                    ),
+                  ),
+                );
+              }
+
+              if (value == 'FINISH_CPO') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UnloadingCPOPage(
+                      userId: widget.userId,
+                      token: widget.token,
+                      stage: UnloadingCPOStage.finish,
+                    ),
+                  ),
+                );
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(
+                value: 'START_CPO',
+                child: Text('Start Unloading CPO'),
+              ),
+              PopupMenuItem<String>(
+                value: 'FINISH_CPO',
+                child: Text('Finish Unloading CPO'),
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: fetchUnloadingStatistics,
@@ -187,7 +187,7 @@ class _HomeUnloadingCPOPageState extends State<HomeUnloadingCPOPage> {
                                 children: const [
                                   Icon(Icons.local_shipping, color: Colors.black),
                                   SizedBox(width: 8),
-                                  Text("Unloading CPO",
+                                    Text("Start Unloading CPO",
                                       style: TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold)),
@@ -195,8 +195,8 @@ class _HomeUnloadingCPOPageState extends State<HomeUnloadingCPOPage> {
                               ),
                               const SizedBox(height: 20),
                               _buildInfoRow("Total Truk Masuk", "$totalMasuk"),
-                              _buildInfoRow("Truk Belum Unloading", "$belumUnloading"),
-                              _buildInfoRow("Truk Sudah Unloading", "$sudahUnloading"),
+                              _buildInfoRow("Truk Belum Start Unloading", "$belumUnloading"),
+                              _buildInfoRow("Truk Sudah WB Out", "$sudahUnloading"),
                               _buildInfoRow("Total Truk Keluar", "$totalKeluar"),
                             ],
                           ),

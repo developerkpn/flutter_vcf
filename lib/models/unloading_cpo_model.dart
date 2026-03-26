@@ -16,12 +16,17 @@ class UnloadingCpoModel {
   final String? commodity_name;
   final String? transporter_name;
   final String? regist_status;
+  final String? latest_status;
+  final String? stage;
   final String? unloading_status;
+  final String? unloading_2_status;
 
   final String? bruto_weight;
   final String? vendor_ffa;
   final String? vendor_moisture;
   final String? created_at;
+  final String? updated_at;
+  final String? approved_at;
 
   // --- NEW FIELDS FROM BACKEND ---
   final String? unloading_id;
@@ -51,11 +56,16 @@ class UnloadingCpoModel {
     this.commodity_name,
     this.transporter_name,
     this.regist_status,
+    this.latest_status,
+    this.stage,
     this.unloading_status,
+    this.unloading_2_status,
     this.bruto_weight,
     this.vendor_ffa,
     this.vendor_moisture,
     this.created_at,
+    this.updated_at,
+    this.approved_at,
     this.unloading_id,
     this.tank_id,
     this.tank_code,
