@@ -41,7 +41,7 @@ LabPkDetailData _$LabPkDetailDataFromJson(Map<String, dynamic> json) =>
       labRecords: (json['lab_records'] as List<dynamic>?)
           ?.map((e) => LabPkRecord.fromJson(e as Map<String, dynamic>))
           .toList(),
-      labCount: (json['lab_count'] as num?)?.toInt(),
+      labCount: LabPkDetailData._toInt(json['lab_count']),
       vendorFfa: json['vendor_ffa'] as String?,
       vendorMoisture: json['vendor_moisture'] as String?,
     );
@@ -69,7 +69,7 @@ Map<String, dynamic> _$LabPkDetailDataToJson(LabPkDetailData instance) =>
 
 LabPkRecord _$LabPkRecordFromJson(Map<String, dynamic> json) => LabPkRecord(
   labId: json['lab_id'] as String?,
-  counter: (json['counter'] as num?)?.toInt(),
+  counter: LabPkRecord._toInt(json['counter']),
   ffa: json['ffa'] as String?,
   moisture: json['moisture'] as String?,
   dirt: json['dirt'] as String?,
@@ -81,7 +81,7 @@ LabPkRecord _$LabPkRecordFromJson(Map<String, dynamic> json) => LabPkRecord(
   photos: (json['photos'] as List<dynamic>?)
       ?.map((e) => LabPkPhoto.fromJson(e as Map<String, dynamic>))
       .toList(),
-  photosCount: (json['photos_count'] as num?)?.toInt(),
+  photosCount: LabPkRecord._toInt(json['photos_count']),
 );
 
 Map<String, dynamic> _$LabPkRecordToJson(LabPkRecord instance) =>
@@ -102,7 +102,7 @@ Map<String, dynamic> _$LabPkRecordToJson(LabPkRecord instance) =>
 
 LabPkPhoto _$LabPkPhotoFromJson(Map<String, dynamic> json) => LabPkPhoto(
   photoId: json['photo_id'] as String?,
-  sequence: (json['sequence'] as num?)?.toInt(),
+  sequence: LabPkPhoto._toInt(json['sequence']),
   path: json['path'] as String?,
   url: json['url'] as String?,
   takenAt: json['taken_at'] as String?,

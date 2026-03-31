@@ -60,7 +60,7 @@ class LabPkDetailData {
   @JsonKey(name: "lab_records")
   final List<LabPkRecord>? labRecords;
 
-  @JsonKey(name: "lab_count")
+  @JsonKey(name: "lab_count", fromJson: _toInt)
   final int? labCount;
 
   @JsonKey(name: "vendor_ffa")
@@ -93,6 +93,13 @@ class LabPkDetailData {
       _$LabPkDetailDataFromJson(json);
 
   Map<String, dynamic> toJson() => _$LabPkDetailDataToJson(this);
+
+  static int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
 }
 
 @JsonSerializable()
@@ -100,6 +107,7 @@ class LabPkRecord {
   @JsonKey(name: "lab_id")
   final String? labId;
 
+  @JsonKey(fromJson: _toInt)
   final int? counter;
   final String? ffa;
   final String? moisture;
@@ -120,7 +128,7 @@ class LabPkRecord {
   @JsonKey(name: "photos")
   final List<LabPkPhoto>? photos;
 
-  @JsonKey(name: "photos_count")
+  @JsonKey(name: "photos_count", fromJson: _toInt)
   final int? photosCount;
 
   LabPkRecord({
@@ -142,6 +150,13 @@ class LabPkRecord {
       _$LabPkRecordFromJson(json);
 
   Map<String, dynamic> toJson() => _$LabPkRecordToJson(this);
+
+  static int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
 }
 
 @JsonSerializable()
@@ -149,6 +164,7 @@ class LabPkPhoto {
   @JsonKey(name: "photo_id")
   final String? photoId;
 
+  @JsonKey(fromJson: _toInt)
   final int? sequence;
   final String? path;
   final String? url;
@@ -168,4 +184,11 @@ class LabPkPhoto {
       _$LabPkPhotoFromJson(json);
 
   Map<String, dynamic> toJson() => _$LabPkPhotoToJson(this);
+
+  static int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
 }

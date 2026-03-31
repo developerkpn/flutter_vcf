@@ -49,7 +49,20 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
   bool _isDetailLoaded = false;
 
   final ImagePicker picker = ImagePicker();
-  int get _currentSamplingCounter => widget.model.counter ?? 0;
+  int get _currentSamplingCounter {
+    final fromModel = widget.model.counter ?? 0;
+    if (fromModel > 0) return fromModel;
+
+    if (_labRecords.isNotEmpty) {
+      final maxCounter = _labRecords
+          .map((e) => (e.counter ?? 0) as int)
+          .fold<int>(0, (a, b) => a > b ? a : b);
+      if (maxCounter > 0) return maxCounter;
+    }
+
+    // Re-lab without explicit counter should default to counter 1.
+    return _isRelab ? 1 : 0;
+  }
   bool get _isRelab {
     final regist = (widget.model.registStatus ?? '').toLowerCase().trim();
     return widget.model.isRelab == true || regist.startsWith('qc_relab');
@@ -190,14 +203,15 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
             _labRecords = sorted;
             _isDetailLoaded = true;
 
-            if (isHoldCase) {
-              final currentCounter = _currentSamplingCounter;
+            final currentCounter = _currentSamplingCounter;
+            final activeRecord = sorted.firstWhere(
+              (e) => (e.counter ?? 0) == currentCounter,
+              orElse: () => sorted.last,
+            );
 
-              final activeRecord = sorted.firstWhere(
-                (e) => (e.counter ?? 0) == currentCounter,
-                orElse: () => sorted.last,
-              );
-
+            // In re-lab and hold flows, prefill with existing saved values
+            // so reopening the form behaves consistently with re-sampling.
+            if (_isRelab || isHoldCase) {
               ffaCtrl.text = activeRecord.ffa ?? "";
               moistCtrl.text = activeRecord.moisture ?? "";
               dirtCtrl.text = activeRecord.dirt ?? "";
@@ -210,9 +224,9 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
                       .where((u) => u.isNotEmpty)
                       .toList() ??
                   [];
-
-              isQcEnabled = true;
             }
+
+            isQcEnabled = true;
           });
         } else {
           setState(() => _isDetailLoaded = true);
@@ -630,6 +644,8 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
 
           _inputFormFields(),
           const SizedBox(height: 12),
+
+          _oldPhotoGallery(),
 
           _cameraSection(),
         ],

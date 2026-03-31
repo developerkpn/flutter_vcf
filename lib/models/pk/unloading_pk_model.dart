@@ -46,7 +46,7 @@ class UnloadingPkModel {
   @JsonKey(name: "unloading_status")
   final String? unloadingStatus;
 
-  @JsonKey(name: "tank_id")
+  @JsonKey(name: "tank_id", fromJson: _toInt)
   final int? tankId;
 
   @JsonKey(name: "tank_code")
@@ -55,7 +55,7 @@ class UnloadingPkModel {
   @JsonKey(name: "tank_name")
   final String? tankName;
 
-  @JsonKey(name: "hole_id")
+  @JsonKey(name: "hole_id", fromJson: _toInt)
   final int? holeId;
 
   @JsonKey(name: "hole_code")
@@ -70,8 +70,14 @@ class UnloadingPkModel {
   @JsonKey(name: "end_time")
   final String? endTime;
 
-  @JsonKey(name: "duration_minutes")
+  @JsonKey(name: "duration_minutes", fromJson: _toInt)
   final int? durationMinutes;
+
+  @JsonKey(name: "counter", fromJson: _toInt)
+  final int? counter;
+
+  @JsonKey(name: "resampling_counter", fromJson: _toInt)
+  final int? resamplingCounter;
 
   @JsonKey(name: "operator_id")
   final String? operatorId;
@@ -112,6 +118,8 @@ class UnloadingPkModel {
     this.startTime,
     this.endTime,
     this.durationMinutes,
+    this.counter,
+    this.resamplingCounter,
     this.operatorId,
     this.hasUnloadingData,
     this.vendorFfa,
@@ -123,4 +131,11 @@ class UnloadingPkModel {
       _$UnloadingPkModelFromJson(json);
 
   Map<String, dynamic> toJson() => _$UnloadingPkModelToJson(this);
+
+  static int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
 }
