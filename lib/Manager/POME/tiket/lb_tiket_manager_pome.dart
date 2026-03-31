@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
+import 'package:flutter_vcf/Manager/widgets/operator_photo_preview_section.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_detail.dart';
@@ -109,7 +110,6 @@ class _LbTiketManagerPOMEPageState extends State<LbTiketManagerPOMEPage> {
                       : rawLatestStatus == 'REJECTED'
                       ? 'REJECT'
                       : rawLatestStatus;
-                  final isPendingCheck = latestStatus == 'PENDING';
                   final isFinalChecked =
                       latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
@@ -257,10 +257,13 @@ class _ManagerLabCheckInputPage extends StatefulWidget {
 class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   ManagerCheckDetail? detail;
   Map<String, dynamic>? operatorLabData;
+  List<String> operatorPhotoSources = [];
   bool isLoading = true;
   bool isSubmitting = false;
 
   final TextEditingController remarksCtrl = TextEditingController();
+  final TextEditingController mgrFfaCtrl = TextEditingController();
+  final TextEditingController mgrMoistureCtrl = TextEditingController();
 
   late ApiService api;
 
@@ -274,6 +277,8 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
   @override
   void dispose() {
     remarksCtrl.dispose();
+    mgrFfaCtrl.dispose();
+    mgrMoistureCtrl.dispose();
     super.dispose();
   }
 
@@ -299,6 +304,7 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
       );
 
       Map<String, dynamic>? fallbackLabData;
+      List<String> fallbackPhotoSources = [];
       final managerLabData = res.data?.lab_data;
       final managerLabDataEmpty =
           managerLabData == null || managerLabData.isEmpty;
@@ -317,10 +323,35 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
               'tested_by': data.testedBy,
               'tested_at': data.testedAt,
             };
+            fallbackPhotoSources = (data.photos ?? [])
+                .map((p) => p.url ?? p.path ?? '')
+                .where((s) => s.isNotEmpty)
+                .toList();
           }
         } catch (_) {
           fallbackLabData = null;
         }
+      }
+
+      final primaryPhotoSources = managerLabDataEmpty
+          ? <String>[]
+          : extractOperatorPhotoSources([
+              managerLabData,
+              res.data?.lab_records,
+              res.data?.pk_cycle_records,
+            ]);
+
+      if (fallbackPhotoSources.isEmpty && primaryPhotoSources.isEmpty) {
+        try {
+          final labRes = await api.getLabPomeDetail(
+            "Bearer ${widget.token}",
+            registrationId,
+          );
+          fallbackPhotoSources = (labRes.data?.photos ?? [])
+              .map((p) => p.url ?? p.path ?? '')
+              .where((s) => s.isNotEmpty)
+              .toList();
+        } catch (_) {}
       }
 
       if (!mounted) return;
@@ -329,6 +360,9 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         operatorLabData = managerLabDataEmpty
             ? fallbackLabData
             : managerLabData;
+        operatorPhotoSources = primaryPhotoSources.isNotEmpty
+            ? primaryPhotoSources
+            : fallbackPhotoSources;
         isLoading = false;
       });
     } catch (e) {
@@ -355,11 +389,19 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
     setState(() => isSubmitting = true);
 
     try {
-      await api.submitManagerLabCheck("Bearer ${widget.token}", {
+      final payload = <String, dynamic>{
         'registration_id': registrationId,
         'check_status': status.toUpperCase(),
         'remarks': remarksCtrl.text.trim(),
-      });
+      };
+
+      final mgrFfa = _toDoubleOrNull(mgrFfaCtrl.text);
+      final mgrMoisture = _toDoubleOrNull(mgrMoistureCtrl.text);
+
+      if (mgrFfa != null) payload['mgr_ffa'] = mgrFfa;
+      if (mgrMoisture != null) payload['mgr_moisture'] = mgrMoisture;
+
+      await api.submitManagerLabCheck("Bearer ${widget.token}", payload);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -420,6 +462,36 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
         ],
       ),
     );
+  }
+
+  Widget _managerInputField(
+    String label,
+    TextEditingController controller,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          TextFormField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double? _toDoubleOrNull(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) return null;
+    return double.tryParse(normalized);
   }
 
   @override
@@ -512,7 +584,14 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
 
                   const SizedBox(height: 16),
 
-                  // Manager review info (operator values are read-only)
+                  OperatorPhotoPreviewSection(
+                    photoSources: operatorPhotoSources,
+                  ),
+
+                  if (operatorPhotoSources.isNotEmpty)
+                    const SizedBox(height: 16),
+
+                  // Manager lab input
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -520,19 +599,17 @@ class _ManagerLabCheckInputPageState extends State<_ManagerLabCheckInputPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "Verifikasi Manager",
+                            "Input Manager Lab",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                           ),
                           const Divider(),
-                          Text(
-                            "Nilai operator bersifat read-only. Manager hanya pilih APPROVE/REJECT dan isi remarks bila perlu.",
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade700,
-                            ),
+                          _managerInputField("Manager FFA", mgrFfaCtrl),
+                          _managerInputField(
+                            "Manager Moisture",
+                            mgrMoistureCtrl,
                           ),
                         ],
                       ),

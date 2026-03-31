@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:developer';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/api_service.dart';
@@ -9,15 +10,18 @@ import 'package:flutter_vcf/models/master/response/master_hole_response.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_vcf/config.dart';
+import 'unloading_cpo.dart';
 
 class InputUnloadingCPOPage extends StatefulWidget {
   final String token;
   final UnloadingCpoModel model;
+  final UnloadingCPOStage stage;
 
   const InputUnloadingCPOPage({
     super.key,
     required this.model,
     required this.token,
+    this.stage = UnloadingCPOStage.start,
   });
 
   @override
@@ -27,6 +31,7 @@ class InputUnloadingCPOPage extends StatefulWidget {
 class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
   final TextEditingController remarksCtrl = TextEditingController();
   final double baseFont = 15;
+  static const bool _holdFeatureEnabled = false;
   bool disableHoldButton = false;
 
   File? _image1, _image2, _image3, _image4;
@@ -45,8 +50,6 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
   int? selectedTankId;
   int? selectedHoleId;
 
-  List<String> _existingPhotos = [];
-
   @override
   void initState() {
     super.initState();
@@ -57,10 +60,20 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
   }
 
   bool _isHoldTicket() {
-    final unloadingStatus = (widget.model.unloading_status ?? '').toLowerCase().trim();
+    final latestStatus = (widget.model.latest_status ?? '').toLowerCase().trim();
     final registStatus = (widget.model.regist_status ?? '').toLowerCase().trim();
-    if (unloadingStatus == 'hold' || unloadingStatus == 'unloading_hold') return true;
-    if (registStatus == 'unloading_hold') return true;
+    final startStatus = (widget.model.unloading_status ?? '').toLowerCase().trim();
+    final finishStatus = (widget.model.unloading_2_status ?? '').toLowerCase().trim();
+
+    if (latestStatus == widget.stage.holdStatus ||
+        registStatus == widget.stage.holdStatus) {
+      return true;
+    }
+
+    if (widget.stage == UnloadingCPOStage.start) {
+      return startStatus == 'hold' || startStatus == 'unloading_hold';
+    }
+
     return false;
   }
 
@@ -68,10 +81,15 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
     if (!_isHoldTicket()) return;
 
     try {
-      final detail = await api.getUnloadingCpoDetail(
-        "Bearer ${widget.token}",
-        widget.model.registration_id!,
-      );
+      final detail = widget.stage == UnloadingCPOStage.start
+          ? await api.getUnloadingCpoDetail(
+              "Bearer ${widget.token}",
+              widget.model.registration_id!,
+            )
+          : await api.getFinishUnloadingCpoDetail(
+              "Bearer ${widget.token}",
+              widget.model.registration_id!,
+            );
 
       final d = detail.data;
 
@@ -84,7 +102,6 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
         selectedTankId = d?.tankId;
         selectedHoleId = d?.holeId;
         remarksCtrl.text = d?.remarks ?? "";
-        _existingPhotos = [];
         _image1 = _image2 = _image3 = _image4 = null;
 
 
@@ -247,10 +264,28 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
       if (photos.isNotEmpty) "photos": photos,
     };
 
+    log(
+      '[CPO ${widget.stage.name}] submit regId=${widget.model.registration_id} '
+      'ticket=${widget.model.wb_ticket_no} status=$status '
+      'tank=$selectedTankId hole=$selectedHoleId photos=${photos.length}',
+      name: 'unloading_cpo_submit',
+    );
+
     try {
-      final res = await api.submitUnloadingStatus(
-        "Bearer ${widget.token}",
-        payload,
+      final res = widget.stage == UnloadingCPOStage.start
+          ? await api.submitUnloadingStatus(
+              "Bearer ${widget.token}",
+              payload,
+            )
+          : await api.submitFinishUnloadingCpoStatus(
+              "Bearer ${widget.token}",
+              payload,
+            );
+
+      log(
+        '[CPO ${widget.stage.name}] submit response success=${res.success} '
+        'message=${res.message}',
+        name: 'unloading_cpo_submit',
       );
 
       if (res.success) {
@@ -291,10 +326,28 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
       if (photos.isNotEmpty) "photos": photos,
     };
 
+    log(
+      '[CPO ${widget.stage.name}] approve regId=${widget.model.registration_id} '
+      'ticket=${widget.model.wb_ticket_no} '
+      'tank=$selectedTankId hole=$selectedHoleId photos=${photos.length}',
+      name: 'unloading_cpo_submit',
+    );
+
     try {
-      final res = await api.submitUnloadingStatus(
-        "Bearer ${widget.token}",
-        payload,
+      final res = widget.stage == UnloadingCPOStage.start
+          ? await api.submitUnloadingStatus(
+              "Bearer ${widget.token}",
+              payload,
+            )
+          : await api.submitFinishUnloadingCpoStatus(
+              "Bearer ${widget.token}",
+              payload,
+            );
+
+      log(
+        '[CPO ${widget.stage.name}] approve response success=${res.success} '
+        'message=${res.message}',
+        name: 'unloading_cpo_submit',
       );
 
       if (res.success) {
@@ -337,7 +390,7 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
       appBar: AppBar(
         backgroundColor: Colors.blue,
         title: Text(
-          "Input Unloading CPO",
+          widget.stage.inputTitle,
           style: TextStyle(
             fontSize: baseFont + 4,     
             // fontWeight: FontWeight.bold, 
@@ -473,14 +526,27 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
 
 
           const SizedBox(height: 30),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _btn("Hold", Colors.orange, () => _confirmAndSubmit("hold"), enabled: !disableHoldButton),
-              _btn("Finish", Colors.blue, _confirmAndFinish),
-              _btn("Reject", Colors.red, () => _confirmAndSubmit("rejected")),
-            ],
-          ),
+          if (widget.stage == UnloadingCPOStage.start)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _btn(
+                  "Hold",
+                  Colors.orange,
+                  () => _confirmAndSubmit("hold"),
+                  enabled: _holdFeatureEnabled && !disableHoldButton,
+                ),
+                _btn("Approve", Colors.blue, _confirmAndFinish),
+                _btn("Reject", Colors.red, () => _confirmAndSubmit("cancel")),
+              ],
+            )
+          else
+            Center(
+              child: SizedBox(
+                width: 140,
+                child: _btn("Approve", Colors.blue, _confirmAndFinish),
+              ),
+            ),
         ],
       ),
     ));
@@ -544,11 +610,6 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
     ),
   );
 }
-
-
-
-  Widget _fieldInput(String label, TextEditingController c, {int maxLines = 1}) =>
-      TextField(controller: c, maxLines: maxLines, style: const TextStyle(fontSize: 13), decoration: _dec(label));
 
   Widget _btn(String text, Color c, VoidCallback onTap, {bool enabled = true}) =>
       ElevatedButton(

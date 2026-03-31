@@ -8,6 +8,7 @@ class ManagerCheckTicketsResponse {
   final bool? success;
   final String? message;
   final List<ManagerCheckTicket>? data;
+  @JsonKey(fromJson: _toInt)
   final int? total;
 
   ManagerCheckTicketsResponse({
@@ -19,4 +20,11 @@ class ManagerCheckTicketsResponse {
 
   factory ManagerCheckTicketsResponse.fromJson(Map<String, dynamic> json) =>
       _$ManagerCheckTicketsResponseFromJson(json);
+
+  static int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
 }

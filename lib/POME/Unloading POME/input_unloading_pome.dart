@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:developer';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/api_service.dart';
@@ -9,15 +10,18 @@ import 'package:flutter_vcf/models/master/response/master_hole_response.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_vcf/config.dart';
+import 'unloading_pome.dart';
 
 class InputUnloadingPOMEPage extends StatefulWidget {
   final String token;
   final UnloadingPomeModel model;
+  final UnloadingPOMEStage stage;
 
   const InputUnloadingPOMEPage({
     super.key,
     required this.model,
     required this.token,
+    this.stage = UnloadingPOMEStage.start,
   });
 
   @override
@@ -27,6 +31,7 @@ class InputUnloadingPOMEPage extends StatefulWidget {
 class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
   final TextEditingController remarksCtrl = TextEditingController();
   final double baseFont = 15;
+  static const bool _holdFeatureEnabled = false;
 
   bool disableHoldButton = false;
   bool unloadingStarted = false;
@@ -45,9 +50,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
   int? selectedTankId;
   int? selectedHoleId;
 
-  /// URL foto yang sudah tersimpan (kalau tiket HOLD)
-  List<String> _existingPhotos = [];
-
   @override
   void initState() {
     super.initState();
@@ -59,15 +61,24 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
   }
 
   bool _isHoldTicket() {
-    final unloadingStatus =
-        (widget.model.unloading_status ?? '').toLowerCase().trim();
+    final latestStatus =
+        (widget.model.latest_status ?? '').toLowerCase().trim();
     final registStatus =
         (widget.model.regist_status ?? '').toLowerCase().trim();
+    final startStatus =
+        (widget.model.unloading_status ?? '').toLowerCase().trim();
+    final finishStatus =
+        (widget.model.unloading_2_status ?? '').toLowerCase().trim();
 
-    if (unloadingStatus == 'hold' || unloadingStatus == 'unloading_hold') {
+    if (latestStatus == widget.stage.holdStatus ||
+        registStatus == widget.stage.holdStatus) {
       return true;
     }
-    if (registStatus == 'unloading_hold') return true;
+
+    if (widget.stage == UnloadingPOMEStage.start) {
+      return startStatus == 'hold' || startStatus == 'unloading_hold';
+    }
+
     return false;
   }
 
@@ -75,10 +86,15 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
     if (!_isHoldTicket()) return;
 
     try {
-      final detail = await api.getUnloadingPomeDetail(
-        "Bearer ${widget.token}",
-        widget.model.registration_id!,
-      );
+      final detail = widget.stage == UnloadingPOMEStage.start
+          ? await api.getUnloadingPomeDetail(
+              "Bearer ${widget.token}",
+              widget.model.registration_id!,
+            )
+          : await api.getFinishUnloadingPomeDetail(
+              "Bearer ${widget.token}",
+              widget.model.registration_id!,
+            );
 
       final d = detail.data;
 
@@ -91,12 +107,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
         selectedTankId = d?.tankId;
         selectedHoleId = d?.holeId;
         remarksCtrl.text = d?.remarks ?? "";
-
-        // ambil url foto existing 
-        _existingPhotos = (d?.photos ?? [])
-            .map<String>((p) => p.url ?? "")
-            .where((e) => e.isNotEmpty)
-            .toList();
 
         _image1 = _image2 = _image3 = _image4 = null;
       });
@@ -266,10 +276,28 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
       if (photos.isNotEmpty) "photos": photos,
     };
 
+    log(
+      '[POME ${widget.stage.name}] submit regId=${widget.model.registration_id} '
+      'ticket=${widget.model.wb_ticket_no} status=$status '
+      'tank=$selectedTankId hole=$selectedHoleId photos=${photos.length}',
+      name: 'unloading_pome_submit',
+    );
+
     try {
-      final res = await api.submitUnloadingPome(
-        "Bearer ${widget.token}",
-        payload,
+      final res = widget.stage == UnloadingPOMEStage.start
+          ? await api.submitUnloadingPome(
+              "Bearer ${widget.token}",
+              payload,
+            )
+          : await api.submitFinishUnloadingPome(
+              "Bearer ${widget.token}",
+              payload,
+            );
+
+      log(
+        '[POME ${widget.stage.name}] submit response success=${res.success} '
+        'message=${res.message}',
+        name: 'unloading_pome_submit',
       );
 
       if (res.success) {
@@ -312,10 +340,28 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
       if (photos.isNotEmpty) "photos": photos,
     };
 
+    log(
+      '[POME ${widget.stage.name}] approve regId=${widget.model.registration_id} '
+      'ticket=${widget.model.wb_ticket_no} '
+      'tank=$selectedTankId hole=$selectedHoleId photos=${photos.length}',
+      name: 'unloading_pome_submit',
+    );
+
     try {
-      final res = await api.submitUnloadingPome(
-        "Bearer ${widget.token}",
-        payload,
+      final res = widget.stage == UnloadingPOMEStage.start
+          ? await api.submitUnloadingPome(
+              "Bearer ${widget.token}",
+              payload,
+            )
+          : await api.submitFinishUnloadingPome(
+              "Bearer ${widget.token}",
+              payload,
+            );
+
+      log(
+        '[POME ${widget.stage.name}] approve response success=${res.success} '
+        'message=${res.message}',
+        name: 'unloading_pome_submit',
       );
 
       if (res.success) {
@@ -358,7 +404,7 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
       appBar: AppBar(
         backgroundColor: Colors.blue,
         title: Text(
-          "Input Unloading POME",
+          widget.stage.inputTitle,
           style: TextStyle(
             fontSize: baseFont + 4,
             color: Colors.black,
@@ -477,27 +523,39 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
 
             const SizedBox(height: 30),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _btn(
-                  "Hold",
-                  Colors.orange,
-                  () => _confirmAndSubmit("hold"),
-                  enabled: !disableHoldButton,
+            if (widget.stage == UnloadingPOMEStage.start)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _btn(
+                    "Hold",
+                    Colors.orange,
+                    () => _confirmAndSubmit("hold"),
+                    enabled: _holdFeatureEnabled && !disableHoldButton,
+                  ),
+                  _btn(
+                    "Approve",
+                    Colors.blue,
+                    _confirmAndFinish,
+                  ),
+                  _btn(
+                    "Reject",
+                    Colors.red,
+                    () => _confirmAndSubmit("cancel"),
+                  ),
+                ],
+              )
+            else
+              Center(
+                child: SizedBox(
+                  width: 140,
+                  child: _btn(
+                    "Approve",
+                    Colors.blue,
+                    _confirmAndFinish,
+                  ),
                 ),
-                _btn(
-                  "Finish",
-                  Colors.blue,
-                  _confirmAndFinish,
-                ),
-                _btn(
-                  "Reject",
-                  Colors.red,
-                  () => _confirmAndSubmit("rejected"),
-                ),
-              ],
-            ),
+              ),
           ],
         ),
       ),

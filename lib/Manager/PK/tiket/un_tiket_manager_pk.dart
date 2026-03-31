@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vcf/Manager/manager_check_ticket_filter.dart';
+import 'package:flutter_vcf/Manager/widgets/operator_photo_preview_section.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/manager/manager_check_detail.dart';
@@ -122,7 +123,6 @@ class _UnTiketManagerPKPageState extends State<UnTiketManagerPKPage> {
                       : rawLatestStatus == 'REJECTED'
                       ? 'REJECT'
                       : rawLatestStatus;
-                  final isPendingCheck = latestStatus == 'PENDING';
                   final isFinalChecked =
                       latestStatus == 'APPROVE' || latestStatus == 'REJECT';
                   final hasManagerCheck = ticket.has_manager_check == true;
@@ -327,10 +327,16 @@ class _ManagerUnloadingCheckInputPage extends StatefulWidget {
 class _ManagerUnloadingCheckInputPageState
     extends State<_ManagerUnloadingCheckInputPage> {
   ManagerCheckDetail? detail;
+  List<String> operatorPhotoSources = [];
   bool isLoading = true;
   bool isSubmitting = false;
 
   final TextEditingController remarksCtrl = TextEditingController();
+  final TextEditingController mgrTankIdCtrl = TextEditingController();
+  final TextEditingController mgrHoleIdCtrl = TextEditingController();
+  final TextEditingController mgrStatusCtrl = TextEditingController();
+  final TextEditingController mgrStartTimeCtrl = TextEditingController();
+  final TextEditingController mgrEndTimeCtrl = TextEditingController();
 
   late ApiService api;
 
@@ -344,6 +350,11 @@ class _ManagerUnloadingCheckInputPageState
   @override
   void dispose() {
     remarksCtrl.dispose();
+    mgrTankIdCtrl.dispose();
+    mgrHoleIdCtrl.dispose();
+    mgrStatusCtrl.dispose();
+    mgrStartTimeCtrl.dispose();
+    mgrEndTimeCtrl.dispose();
     super.dispose();
   }
 
@@ -368,10 +379,32 @@ class _ManagerUnloadingCheckInputPageState
         "unloading",
       );
 
+      final primaryPhotoSources = extractOperatorPhotoSources([
+        detailRes.data?.unloading_data,
+        detailRes.data?.pk_cycle_records,
+      ]);
+
+      var fallbackPhotoSources = <String>[];
+      if (primaryPhotoSources.isEmpty) {
+        try {
+          final unloadingRes = await api.getUnloadingPkDetail(
+            "Bearer ${widget.token}",
+            registrationId,
+          );
+          fallbackPhotoSources = (unloadingRes.data?.photos ?? [])
+              .map((p) => p.url ?? p.path ?? '')
+              .where((s) => s.isNotEmpty)
+              .toList();
+        } catch (_) {}
+      }
+
       if (!mounted) return;
 
       setState(() {
         detail = detailRes.data;
+        operatorPhotoSources = primaryPhotoSources.isNotEmpty
+            ? primaryPhotoSources
+            : fallbackPhotoSources;
         isLoading = false;
       });
     } catch (e) {
@@ -398,11 +431,25 @@ class _ManagerUnloadingCheckInputPageState
     setState(() => isSubmitting = true);
 
     try {
-      await api.submitManagerUnloadingCheck("Bearer ${widget.token}", {
+      final payload = <String, dynamic>{
         'registration_id': registrationId,
         'check_status': status.toUpperCase(),
         'remarks': remarksCtrl.text.trim(),
-      });
+      };
+
+      final mgrTankId = _toIntOrNull(mgrTankIdCtrl.text);
+      final mgrHoleId = _toIntOrNull(mgrHoleIdCtrl.text);
+      final mgrStatus = mgrStatusCtrl.text.trim();
+      final mgrStartTime = mgrStartTimeCtrl.text.trim();
+      final mgrEndTime = mgrEndTimeCtrl.text.trim();
+
+      if (mgrTankId != null) payload['mgr_tank_id'] = mgrTankId;
+      if (mgrHoleId != null) payload['mgr_hole_id'] = mgrHoleId;
+      if (mgrStatus.isNotEmpty) payload['unloading_status'] = mgrStatus;
+      if (mgrStartTime.isNotEmpty) payload['start_time'] = mgrStartTime;
+      if (mgrEndTime.isNotEmpty) payload['end_time'] = mgrEndTime;
+
+      await api.submitManagerUnloadingCheck("Bearer ${widget.token}", payload);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -463,6 +510,37 @@ class _ManagerUnloadingCheckInputPageState
         ],
       ),
     );
+  }
+
+  Widget _managerInputField(
+    String label,
+    TextEditingController controller, {
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          TextFormField(
+            controller: controller,
+            keyboardType: keyboardType,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int? _toIntOrNull(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) return null;
+    return int.tryParse(normalized);
   }
 
   @override
@@ -559,7 +637,14 @@ class _ManagerUnloadingCheckInputPageState
 
                   const SizedBox(height: 16),
 
-                  // Manager review info (operator values are read-only)
+                  OperatorPhotoPreviewSection(
+                    photoSources: operatorPhotoSources,
+                  ),
+
+                  if (operatorPhotoSources.isNotEmpty)
+                    const SizedBox(height: 16),
+
+                  // Manager unloading input
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -567,19 +652,34 @@ class _ManagerUnloadingCheckInputPageState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "Verifikasi Manager",
+                            "Input Manager Unloading",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                           ),
                           const Divider(),
-                          Text(
-                            "Data operator bersifat read-only. Manager hanya pilih APPROVE/REJECT dan isi remarks bila perlu.",
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade700,
-                            ),
+                          _managerInputField(
+                            "Manager Tank ID",
+                            mgrTankIdCtrl,
+                            keyboardType: TextInputType.number,
+                          ),
+                          _managerInputField(
+                            "Manager Hole ID",
+                            mgrHoleIdCtrl,
+                            keyboardType: TextInputType.number,
+                          ),
+                          _managerInputField(
+                            "Manager Status",
+                            mgrStatusCtrl,
+                          ),
+                          _managerInputField(
+                            "Manager Start Time",
+                            mgrStartTimeCtrl,
+                          ),
+                          _managerInputField(
+                            "Manager End Time",
+                            mgrEndTimeCtrl,
                           ),
                         ],
                       ),

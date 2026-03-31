@@ -29,6 +29,8 @@ class LabDetailData {
   @JsonKey(name: "tested_by")
   final String? testedBy;
 
+  final List<LabPhoto>? photos;
+
   LabDetailData({
     this.ffa,
     this.moisture,
@@ -38,9 +40,31 @@ class LabDetailData {
     this.status,
     this.testedAt,
     this.testedBy,
+    this.photos,
   });
 
   factory LabDetailData.fromJson(Map<String, dynamic> json) =>
       _$LabDetailDataFromJson(json);
   Map<String, dynamic> toJson() => _$LabDetailDataToJson(this);
+}
+
+@JsonSerializable()
+class LabPhoto {
+  @JsonKey(name: 'photo_id')
+  final String? photoId;
+  final int? sequence;
+  final String? path;
+  final String? url;
+
+  LabPhoto({
+    this.photoId,
+    this.sequence,
+    this.path,
+    this.url,
+  });
+
+  factory LabPhoto.fromJson(Map<String, dynamic> json) =>
+      _$LabPhotoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$LabPhotoToJson(this);
 }

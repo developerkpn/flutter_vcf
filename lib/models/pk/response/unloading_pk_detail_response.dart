@@ -61,7 +61,7 @@ class UnloadingPkDetailData {
   @JsonKey(name: "unloading_id")
   final String? unloadingId;
 
-  @JsonKey(name: "tank_id")
+  @JsonKey(name: "tank_id", fromJson: _toInt)
   final int? tankId;
 
   @JsonKey(name: "tank_code")
@@ -70,7 +70,7 @@ class UnloadingPkDetailData {
   @JsonKey(name: "tank_name")
   final String? tankName;
 
-  @JsonKey(name: "hole_id")
+  @JsonKey(name: "hole_id", fromJson: _toInt)
   final int? holeId;
 
   @JsonKey(name: "hole_code")
@@ -96,7 +96,7 @@ class UnloadingPkDetailData {
   @JsonKey(name: "has_unloading_data")
   final bool? hasUnloadingData;
 
-  @JsonKey(name: "duration_minutes")
+  @JsonKey(name: "duration_minutes", fromJson: _toInt)
   final int? durationMinutes;
 
   @JsonKey(name: "vendor_ffa")
@@ -147,6 +147,13 @@ class UnloadingPkDetailData {
       _$UnloadingPkDetailDataFromJson(json);
 
   Map<String, dynamic> toJson() => _$UnloadingPkDetailDataToJson(this);
+
+  static int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
 }
 
 @JsonSerializable()
@@ -154,6 +161,7 @@ class UnloadingPkPhoto {
   @JsonKey(name: "photo_id")
   final String? photoId;
 
+  @JsonKey(fromJson: _toInt)
   final int? sequence;
   final String? path;
   final String? url;
@@ -173,4 +181,11 @@ class UnloadingPkPhoto {
       _$UnloadingPkPhotoFromJson(json);
 
   Map<String, dynamic> toJson() => _$UnloadingPkPhotoToJson(this);
+
+  static int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
 }

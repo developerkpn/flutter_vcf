@@ -65,18 +65,33 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
     return reg.isNotEmpty ? reg : unload;
   }
 
-  String displayStatus(String status) {
+  int _resolveReunloadingStep(model.UnloadingPkModel t) {
+    final c1 = t.counter;
+    if (c1 != null && c1 > 0) return c1;
+
+    final c2 = t.resamplingCounter;
+    if (c2 != null && c2 > 0) return c2;
+
+    final reg = (t.registStatus ?? '').toLowerCase().trim();
+    if (reg == 'qc_reunloading') return 2;
+
+    return 1;
+  }
+
+  String displayStatus(String status, model.UnloadingPkModel t) {
+    final step = _resolveReunloadingStep(t);
+
     switch (status) {
       case "hold_unloading":
-        return "RESAMPLING";
+        return "RE-UNLOADING $step";
       case "hold_reunloading":
-        return "RESAMPLING";
+        return "RE-UNLOADING $step";
       case "hold_resampling":
-        return "RESAMPLING";
+        return "RE-UNLOADING $step";
       case "qc_resampling":
-        return "RESAMPLING";
+        return "RE-UNLOADING $step";
       case "qc_reunloading":
-        return "RE-UNLOADING";
+        return "RE-UNLOADING $step";
       case "pending_manager_approval":
         return "Pending Manager Approval";
       case "cancel":
@@ -136,6 +151,14 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
       default:
         return Icons.help_outline;
     }
+  }
+
+  bool _canOpenTicket(String status) {
+    return status == "qc_resampling" ||
+        status == "qc_reunloading" ||
+        status == "hold_unloading" ||
+        status == "hold_reunloading" ||
+        status == "hold_resampling";
   }
 
   Future<void> _openAddPage() async {
@@ -229,11 +252,7 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
 
               return GestureDetector(
                 onTap: () {
-                  if (status == "hold_unloading" ||
-                      status == "hold_reunloading" ||
-                      status == "hold_resampling" ||
-                      status == "qc_resampling" ||
-                      status == "qc_reunloading") {
+                  if (_canOpenTicket(status)) {
                     _openEditPage(t, index);
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -291,7 +310,7 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    displayStatus(status),
+                                    displayStatus(status, t),
                                     style: TextStyle(
                                       color: statusColor(status),
                                       fontWeight: FontWeight.bold,

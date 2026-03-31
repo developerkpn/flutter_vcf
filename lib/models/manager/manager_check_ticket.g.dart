@@ -35,11 +35,14 @@ ManagerCheckTicket _$ManagerCheckTicketFromJson(Map<String, dynamic> json) =>
       current_stage: json['current_stage'] as String?,
       created_at: json['created_at'] as String?,
       has_manager_check: json['has_manager_check'] as bool?,
-      manager_checks_count: (json['manager_checks_count'] as num?)?.toInt(),
+      manager_checks_count: ManagerCheckTicket._toInt(
+        json['manager_checks_count'],
+      ),
       latest_check_status: json['latest_check_status'] as String?,
       has_any_manager_check: json['has_any_manager_check'] as bool?,
-      manager_checks_count_overall:
-          (json['manager_checks_count_overall'] as num?)?.toInt(),
+      manager_checks_count_overall: ManagerCheckTicket._toInt(
+        json['manager_checks_count_overall'],
+      ),
       latest_manager_check_status_overall:
           json['latest_manager_check_status_overall'] as String?,
       previous_checks: (json['previous_checks'] as List<dynamic>?)

@@ -20,8 +20,8 @@ ManagerCheck _$ManagerCheckFromJson(Map<String, dynamic> json) => ManagerCheck(
   mgr_iv: ManagerCheck._toDouble(json['mgr_iv']),
   mgr_dirt: ManagerCheck._toDouble(json['mgr_dirt']),
   mgr_oil_content: ManagerCheck._toDouble(json['mgr_oil_content']),
-  mgr_tank_id: (json['mgr_tank_id'] as num?)?.toInt(),
-  mgr_hole_id: (json['mgr_hole_id'] as num?)?.toInt(),
+  mgr_tank_id: ManagerCheck._toInt(json['mgr_tank_id']),
+  mgr_hole_id: ManagerCheck._toInt(json['mgr_hole_id']),
   checked_at: json['checked_at'] as String?,
   checked_by: json['checked_by'] as String?,
   photos: (json['photos'] as List<dynamic>?)

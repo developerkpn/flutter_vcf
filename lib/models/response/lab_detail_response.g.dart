@@ -32,6 +32,9 @@ LabDetailData _$LabDetailDataFromJson(Map<String, dynamic> json) =>
       status: json['status'] as String?,
       testedAt: json['tested_at'] as String?,
       testedBy: json['tested_by'] as String?,
+      photos: (json['photos'] as List<dynamic>?)
+          ?.map((e) => LabPhoto.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
 
 Map<String, dynamic> _$LabDetailDataToJson(LabDetailData instance) =>
@@ -44,4 +47,19 @@ Map<String, dynamic> _$LabDetailDataToJson(LabDetailData instance) =>
       'status': instance.status,
       'tested_at': instance.testedAt,
       'tested_by': instance.testedBy,
+      'photos': instance.photos,
     };
+
+LabPhoto _$LabPhotoFromJson(Map<String, dynamic> json) => LabPhoto(
+  photoId: json['photo_id'] as String?,
+  sequence: (json['sequence'] as num?)?.toInt(),
+  path: json['path'] as String?,
+  url: json['url'] as String?,
+);
+
+Map<String, dynamic> _$LabPhotoToJson(LabPhoto instance) => <String, dynamic>{
+  'photo_id': instance.photoId,
+  'sequence': instance.sequence,
+  'path': instance.path,
+  'url': instance.url,
+};

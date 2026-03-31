@@ -57,7 +57,8 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
         // rule:
         // show only if already processed OR in HOLD
         return s == "qc_lab_hold" ||
-            s == "unloading" ||
+          _isLabAdvancedStatus(s) ||
+          s == "unloading" ||
             s == "qc_lab_rejected" ||
             s == "random_check" ||
             (s == "qc_lab" && lab.isNotEmpty);
@@ -126,11 +127,22 @@ class _QCLabPOMEPageState extends State<QCLabPOMEPage> {
   }
 
   bool _isLabAdvancedAfterManagerApproval(String registStatus) {
-    return registStatus == 'unloading' ||
+    return _isLabAdvancedStatus(registStatus) ||
+        registStatus == 'unloading' ||
         registStatus == 'wb_out' ||
         registStatus.startsWith('unloading') ||
+        registStatus.startsWith('start_unloading') ||
+        registStatus.startsWith('finish_unloading') ||
         registStatus.startsWith('qc_reunloading') ||
         registStatus.startsWith('qc_resampling');
+  }
+
+  bool _isLabAdvancedStatus(String registStatus) {
+    return registStatus == 'start_unloading' ||
+        registStatus == 'finish_unloading' ||
+        registStatus == 'wb_out' ||
+        registStatus.startsWith('start_unloading') ||
+        registStatus.startsWith('finish_unloading');
   }
 
   bool _isCancelStatus(String? rawStatus) {
