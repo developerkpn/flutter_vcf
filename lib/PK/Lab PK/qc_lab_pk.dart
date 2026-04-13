@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 
@@ -47,6 +46,9 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
       );
 
       final vehicles = (res.data ?? []).where((v) {
+        final counter = (v.counter ?? 0).clamp(0, 2);
+        if (counter > 0) return true;
+
         final status = (v.labStatus ?? "").toLowerCase().trim();
         final isRelab = v.isRelab == true;
         final registStatus = (v.registStatus ?? '').toLowerCase().trim();
@@ -89,8 +91,26 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
   }
 
   String getPkStatus(QcLabPkVehicle v) {
-    final lab = (v.labStatus ?? "").toLowerCase();
     final regist = (v.registStatus ?? '').toLowerCase().trim();
+    final backendLabel = (v.counterStatusLabel ?? '').toLowerCase().trim();
+    final counter = (v.counter ?? 0).clamp(0, 2);
+
+    if (regist == 'qc_resampling') {
+      return counter == 2 ? 'resampling_2' : 'resampling_1';
+    }
+    if (regist == 'qc_relab') {
+      return counter == 2 ? 'relab_2' : 'relab_1';
+    }
+    if (backendLabel.startsWith('resampling_') ||
+        backendLabel.startsWith('relab_') ||
+        backendLabel.startsWith('reunloading_')) {
+      return backendLabel;
+    }
+
+    if (counter == 2) return 'relab_2';
+    if (counter == 1) return 'relab_1';
+
+    final lab = (v.labStatus ?? "").toLowerCase();
     final isRelabStage = v.isRelab == true || regist.startsWith('qc_relab');
 
     if (!isRelabStage && regist == 'random_check') {
@@ -122,8 +142,8 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
   }
 
   bool isClickable(String status) {
-    // hold + resampling_1 + resampling_2 dapat diklik
-    return ["hold", "resampling_1", "resampling_2"].contains(status);
+    // hold + relab dapat diklik
+    return ["hold", "relab_1", "relab_2"].contains(status);
   }
 
   String statusLabel(String s) {
@@ -133,9 +153,17 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
       case 'cancel':
         return 'CANCEL';
       case 'resampling_1':
-        return 'RE-LAB 1';
+        return 'RESAMPLING 1';
       case 'resampling_2':
+        return 'RESAMPLING 2';
+      case 'relab_1':
+        return 'RE-LAB 1';
+      case 'relab_2':
         return 'RE-LAB 2';
+      case 'reunloading_1':
+        return 'REUNLOADING 1';
+      case 'reunloading_2':
+        return 'REUNLOADING 2';
       default:
         return s.toUpperCase();
     }
@@ -147,12 +175,18 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
         return Colors.green;
       case "hold":
         return Colors.orange;
-      case "cancel":
-      case "rejected":
-        return Colors.red;
       case "resampling_1":
       case "resampling_2":
         return Colors.purple;
+      case "cancel":
+      case "rejected":
+        return Colors.red;
+      case "relab_1":
+      case "relab_2":
+        return Colors.indigo;
+      case "reunloading_1":
+      case "reunloading_2":
+        return Colors.orange;
       case "pending_manager_approval":
         return Colors.yellow.shade700;
       default:
@@ -166,12 +200,20 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
         return Icons.check_circle_outline;
       case "hold":
         return Icons.pause_circle_outline;
-      case "cancel":
-      case "rejected":
-        return Icons.cancel_outlined;
       case "resampling_1":
         return Icons.refresh;
       case "resampling_2":
+        return Icons.loop;
+      case "cancel":
+      case "rejected":
+        return Icons.cancel_outlined;
+      case "relab_1":
+        return Icons.biotech_outlined;
+      case "relab_2":
+        return Icons.science_outlined;
+      case "reunloading_1":
+        return Icons.refresh;
+      case "reunloading_2":
         return Icons.loop;
       case "pending_manager_approval":
         return Icons.error_outline;

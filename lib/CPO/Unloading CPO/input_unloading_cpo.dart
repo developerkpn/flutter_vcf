@@ -50,13 +50,16 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
   int? selectedTankId;
   int? selectedHoleId;
 
+  bool get _isFinishStage => widget.stage == UnloadingCPOStage.finish;
+  bool get _selectionReadOnly => isReadOnly || _isFinishStage;
+
   @override
   void initState() {
     super.initState();
     _dio = AppConfig.createDio(withLogging: true);
     api = ApiService(_dio);
     _loadMasterData();
-    _loadExistingUnloadingIfHold();
+    _loadExistingUnloadingData();
   }
 
   bool _isHoldTicket() {
@@ -77,19 +80,19 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
     return false;
   }
 
-  Future<void> _loadExistingUnloadingIfHold() async {
+  Future<void> _loadExistingUnloadingData() async {
+    if (_isFinishStage) {
+      await _loadStartUnloadingDetail();
+      return;
+    }
+
     if (!_isHoldTicket()) return;
 
     try {
-      final detail = widget.stage == UnloadingCPOStage.start
-          ? await api.getUnloadingCpoDetail(
-              "Bearer ${widget.token}",
-              widget.model.registration_id!,
-            )
-          : await api.getFinishUnloadingCpoDetail(
-              "Bearer ${widget.token}",
-              widget.model.registration_id!,
-            );
+      final detail = await api.getUnloadingCpoDetail(
+        "Bearer ${widget.token}",
+        widget.model.registration_id!,
+      );
 
       final d = detail.data;
 
@@ -110,6 +113,29 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error load detail HOLD: $e")),
+      );
+    }
+  }
+
+  Future<void> _loadStartUnloadingDetail() async {
+    try {
+      final detail = await api.getUnloadingCpoDetail(
+        "Bearer ${widget.token}",
+        widget.model.registration_id!,
+      );
+
+      final d = detail.data;
+
+      if (!mounted) return;
+      setState(() {
+        selectedTankId = d?.tankId;
+        selectedHoleId = d?.holeId;
+        remarksCtrl.text = d?.remarks ?? "";
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error load start unloading: $e")),
       );
     }
   }
@@ -406,54 +432,63 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
         children: [
           ...info.entries.map((e) => _fieldReadOnly(e.key, e.value)).toList(),
           const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: selectedTankId,
-            decoration: _dec("Pilih Tank"),
-              items: tanks.map(
-                (t) => DropdownMenuItem(
-                  value: t.id,
-                  child: Text(
-                    "${t.tank_code} — ${t.tank_name}",
-                    style: TextStyle(
-                      fontSize: baseFont,        
-                      fontWeight: FontWeight.normal,
-                      color: Colors.black,
+          if (_isFinishStage)
+            _fieldReadOnly("Tank", _tankLabel(selectedTankId))
+          else
+            DropdownButtonFormField<int>(
+              value: selectedTankId,
+              decoration: _dec("Pilih Tank"),
+                items: tanks.map(
+                  (t) => DropdownMenuItem(
+                    value: t.id,
+                    child: Text(
+                      "${t.tank_code} — ${t.tank_name}",
+                      style: TextStyle(
+                        fontSize: baseFont,        
+                        fontWeight: FontWeight.normal,
+                        color: Colors.black,
+                      ),
                     ),
+
                   ),
+                ).toList(),
+
+              onChanged: _selectionReadOnly ? null : (v) => setState(() => selectedTankId = v),
+            ),
+          const SizedBox(height: 12),
+          if (_isFinishStage)
+            _fieldReadOnly("Hole", _holeLabel(selectedHoleId))
+          else
+            DropdownButtonFormField<int>(
+              value: selectedHoleId,
+              decoration: _dec("Pilih Hole"),
+              items: holes.map(
+                (h) => DropdownMenuItem(
+                  value: h.id,
+                  child: Text(
+                  "${h.hole_code} — ${h.hole_name}",
+                  style: TextStyle(
+                    fontSize: baseFont,
+                    fontWeight: FontWeight.normal,
+                    color: Colors.black,
+                  ),
+                ),
 
                 ),
               ).toList(),
 
-            onChanged: isReadOnly ? null : (v) => setState(() => selectedTankId = v),
-          ),
+              onChanged: _selectionReadOnly ? null : (v) => setState(() => selectedHoleId = v),
+            ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: selectedHoleId,
-            decoration: _dec("Pilih Hole"),
-            items: holes.map(
-              (h) => DropdownMenuItem(
-                value: h.id,
-                child: Text(
-                "${h.hole_code} — ${h.hole_name}",
-                style: TextStyle(
-                  fontSize: baseFont,
-                  fontWeight: FontWeight.normal,
-                  color: Colors.black,
-                ),
-              ),
-
-              ),
-            ).toList(),
-
-            onChanged: isReadOnly ? null : (v) => setState(() => selectedHoleId = v),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: remarksCtrl,
-            maxLines: 3,
-            decoration: _dec("Remarks"),
-            style: TextStyle(fontSize: baseFont),
-          ),
+          if (_isFinishStage)
+            _fieldReadOnly("Remarks", remarksCtrl.text)
+          else
+            TextField(
+              controller: remarksCtrl,
+              maxLines: 3,
+              decoration: _dec("Remarks"),
+              style: TextStyle(fontSize: baseFont),
+            ),
 
           const SizedBox(height: 12),
           // if (_existingPhotos.isNotEmpty) ...[
@@ -527,18 +562,11 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
 
           const SizedBox(height: 30),
           if (widget.stage == UnloadingCPOStage.start)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _btn(
-                  "Hold",
-                  Colors.orange,
-                  () => _confirmAndSubmit("hold"),
-                  enabled: _holdFeatureEnabled && !disableHoldButton,
-                ),
-                _btn("Approve", Colors.blue, _confirmAndFinish),
-                _btn("Reject", Colors.red, () => _confirmAndSubmit("cancel")),
-              ],
+            Center(
+              child: SizedBox(
+                width: 140,
+                child: _btn("Approve", Colors.blue, _confirmAndFinish),
+              ),
             )
           else
             Center(
@@ -559,6 +587,26 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
       filled: true,
       fillColor: Colors.white, 
     );
+
+  String _tankLabel(int? tankId) {
+    if (tankId == null) return "-";
+    final tank = tanks.cast<TankItem?>().firstWhere(
+      (item) => item?.id == tankId,
+      orElse: () => null,
+    );
+    if (tank == null) return tankId.toString();
+    return "${tank.tank_code} - ${tank.tank_name}";
+  }
+
+  String _holeLabel(int? holeId) {
+    if (holeId == null) return "-";
+    final hole = holes.cast<HoleItem?>().firstWhere(
+      (item) => item?.id == holeId,
+      orElse: () => null,
+    );
+    if (hole == null) return holeId.toString();
+    return "${hole.hole_code} - ${hole.hole_name}";
+  }
 
 
 

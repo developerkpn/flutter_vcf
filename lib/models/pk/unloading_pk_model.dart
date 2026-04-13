@@ -73,11 +73,17 @@ class UnloadingPkModel {
   @JsonKey(name: "duration_minutes", fromJson: _toInt)
   final int? durationMinutes;
 
+  @JsonKey(name: "cycle", fromJson: _toInt)
+  final int? cycle;
+
   @JsonKey(name: "counter", fromJson: _toInt)
   final int? counter;
 
   @JsonKey(name: "resampling_counter", fromJson: _toInt)
   final int? resamplingCounter;
+
+  @JsonKey(name: "counter_status_label")
+  final String? counterStatusLabel;
 
   @JsonKey(name: "operator_id")
   final String? operatorId;
@@ -118,8 +124,10 @@ class UnloadingPkModel {
     this.startTime,
     this.endTime,
     this.durationMinutes,
+    this.cycle,
     this.counter,
     this.resamplingCounter,
+    this.counterStatusLabel,
     this.operatorId,
     this.hasUnloadingData,
     this.vendorFfa,

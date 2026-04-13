@@ -26,8 +26,8 @@ Map<String, dynamic> _$UnloadingCpoDetailResponseToJson(
 
 UnloadingCpoDetail _$UnloadingCpoDetailFromJson(Map<String, dynamic> json) =>
     UnloadingCpoDetail(
-      tankId: (json['tank_id'] as num?)?.toInt(),
-      holeId: (json['hole_id'] as num?)?.toInt(),
+      tankId: _parseIntFromDynamic(json['tank_id']),
+      holeId: _parseIntFromDynamic(json['hole_id']),
       remarks: json['remarks'] as String?,
       photos: (json['photos'] as List<dynamic>?)
           ?.map((e) => UnloadingPhoto.fromJson(e as Map<String, dynamic>))

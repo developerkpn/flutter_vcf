@@ -2,6 +2,14 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'unloading_cpo_detail_response.g.dart';
 
+// Helper function to parse int from String or int
+int? _parseIntFromDynamic(dynamic value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is String) return int.tryParse(value);
+  return null;
+}
+
 @JsonSerializable()
 class UnloadingCpoDetailResponse {
   final bool success;
@@ -22,10 +30,10 @@ class UnloadingCpoDetailResponse {
 
 @JsonSerializable()
 class UnloadingCpoDetail {
-  @JsonKey(name: "tank_id")
+  @JsonKey(name: "tank_id", fromJson: _parseIntFromDynamic)
   final int? tankId;
 
-  @JsonKey(name: "hole_id")
+  @JsonKey(name: "hole_id", fromJson: _parseIntFromDynamic)
   final int? holeId;
 
   final String? remarks;

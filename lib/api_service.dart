@@ -362,6 +362,18 @@ abstract class ApiService {
     @Body() Map<String, dynamic> payload,
   );
 
+  @POST("/unloading/pk/start")
+  Future<SubmitUnloadingResponse> startUnloadingPk(
+    @Header("Authorization") String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
+  @POST("/unloading/pk/finish")
+  Future<SubmitUnloadingResponse> finishUnloadingPk(
+    @Header("Authorization") String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
   // ==================== MANAGER CHECK ====================
 
   @GET("/manager/check/tickets")

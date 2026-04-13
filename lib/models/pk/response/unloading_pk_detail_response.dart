@@ -79,6 +79,24 @@ class UnloadingPkDetailData {
   @JsonKey(name: "hole_name")
   final String? holeName;
 
+  @JsonKey(name: "previous_tank_id", fromJson: _toInt)
+  final int? previousTankId;
+
+  @JsonKey(name: "previous_tank_code")
+  final String? previousTankCode;
+
+  @JsonKey(name: "previous_tank_name")
+  final String? previousTankName;
+
+  @JsonKey(name: "previous_hole_id", fromJson: _toInt)
+  final int? previousHoleId;
+
+  @JsonKey(name: "previous_hole_code")
+  final String? previousHoleCode;
+
+  @JsonKey(name: "previous_hole_name")
+  final String? previousHoleName;
+
   @JsonKey(name: "unloading_status")
   final String? unloadingStatus;
 
@@ -130,6 +148,12 @@ class UnloadingPkDetailData {
     this.holeId,
     this.holeCode,
     this.holeName,
+    this.previousTankId,
+    this.previousTankCode,
+    this.previousTankName,
+    this.previousHoleId,
+    this.previousHoleCode,
+    this.previousHoleName,
     this.unloadingStatus,
     this.remarks,
     this.startTime,

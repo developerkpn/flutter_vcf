@@ -36,6 +36,7 @@ class QcSamplingPkVehicle {
   final bool has_sampling_data;
   final bool is_resampling;
   final int? counter;
+  final String? counter_status_label;
   final String? bruto_weight;
   final String? vendor_ffa;
   final String? vendor_moisture;
@@ -56,6 +57,7 @@ class QcSamplingPkVehicle {
     required this.has_sampling_data,
     required this.is_resampling,
     this.counter,
+    this.counter_status_label,
     this.bruto_weight,
     this.vendor_ffa,
     this.vendor_moisture,

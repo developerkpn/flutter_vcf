@@ -44,6 +44,7 @@ QcLabPkVehicle _$QcLabPkVehicleFromJson(Map<String, dynamic> json) =>
       vendorFfa: QcLabPkVehicle._toDouble(json['vendor_ffa']),
       vendorMoisture: QcLabPkVehicle._toDouble(json['vendor_moisture']),
       counter: (json['counter'] as num?)?.toInt(),
+      counterStatusLabel: json['counter_status_label'] as String?,
       isRelab: json['is_relab'] as bool?,
       labStatus: json['lab_status'] as String?,
     );
@@ -68,4 +69,5 @@ Map<String, dynamic> _$QcLabPkVehicleToJson(QcLabPkVehicle instance) =>
       'lab_status': instance.labStatus,
       'is_relab': instance.isRelab,
       'counter': instance.counter,
+      'counter_status_label': instance.counterStatusLabel,
     };
