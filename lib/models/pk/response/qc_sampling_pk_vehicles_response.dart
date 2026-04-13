@@ -26,11 +26,11 @@ class QcSamplingPkVehicle {
   final String wb_ticket_no;
   final String plate_number;
   final String driver_name;
-  final String vendor_code;
-  final String vendor_name;
+  final String? vendor_code;
+  final String? vendor_name;
   final String commodity_code;
   final String commodity_name;
-  final String transporter_name;
+  final String? transporter_name;
   final String regist_status;
   final String? wb_in_tap_out;
   final bool has_sampling_data;
@@ -47,11 +47,11 @@ class QcSamplingPkVehicle {
     required this.wb_ticket_no,
     required this.plate_number,
     required this.driver_name,
-    required this.vendor_code,
-    required this.vendor_name,
+    this.vendor_code,
+    this.vendor_name,
     required this.commodity_code,
     required this.commodity_name,
-    required this.transporter_name,
+    this.transporter_name,
     required this.regist_status,
     this.wb_in_tap_out,
     required this.has_sampling_data,
