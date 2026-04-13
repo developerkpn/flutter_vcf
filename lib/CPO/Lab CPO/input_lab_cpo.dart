@@ -13,11 +13,7 @@ class InputLabCPOPage extends StatefulWidget {
   final String token;
   final QcLabCpoVehicle model;
 
-  const InputLabCPOPage({
-    super.key,
-    required this.token,
-    required this.model,
-  });
+  const InputLabCPOPage({super.key, required this.token, required this.model});
 
   @override
   State<InputLabCPOPage> createState() => _InputLabCPOPageState();
@@ -29,6 +25,7 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
   final TextEditingController dobCtrl = TextEditingController();
   final TextEditingController ivCtrl = TextEditingController();
   final TextEditingController remarksCtrl = TextEditingController();
+  final TextEditingController remarksHoldCtrl = TextEditingController();
 
   late ApiService api;
   bool _isSubmitting = false;
@@ -46,27 +43,26 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
     super.initState();
     api = ApiService(AppConfig.createDio(withLogging: true));
 
-  debugPrint("lab_status: ${widget.model.lab_status}");
-  debugPrint("regist_status: ${widget.model.regist_status}");
-  
-   final rawStatus = (widget.model.lab_status ?? widget.model.regist_status ?? "")
-    .toLowerCase();
+    debugPrint("lab_status: ${widget.model.lab_status}");
+    debugPrint("regist_status: ${widget.model.regist_status}");
+
+    final rawStatus =
+        (widget.model.lab_status ?? widget.model.regist_status ?? "")
+            .toLowerCase();
 
     isHoldCase = rawStatus.contains("hold");
 
-  debugPrint("rawStatus = $rawStatus");
-  debugPrint("isHoldCase = $isHoldCase");
-
+    debugPrint("rawStatus = $rawStatus");
+    debugPrint("isHoldCase = $isHoldCase");
 
     if (isHoldCase) {
-      isQcEnabled = true;
-      isQcCheckboxEnabled = true;
-      _loadHoldData();  
+      isQcEnabled = false;
+      isQcCheckboxEnabled = false;
+      _loadHoldData();
     } else {
       isQcEnabled = true;
       isQcCheckboxEnabled = false;
     }
-
 
     debugPrint("=== INIT InputLabCPOPage ===");
     debugPrint("Token: ${widget.token}");
@@ -82,6 +78,7 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
     dobCtrl.dispose();
     ivCtrl.dispose();
     remarksCtrl.dispose();
+    remarksHoldCtrl.dispose();
     super.dispose();
   }
 
@@ -164,9 +161,9 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
     final iv = double.tryParse(ivCtrl.text.replaceAll(',', '.'));
 
     if (ffa == null || moisture == null || dobi == null || iv == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Input angka tidak valid")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Input angka tidak valid")));
       return false;
     }
 
@@ -180,7 +177,9 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
         iv < 0 ||
         iv > 1000) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Data yang dimasukin tidak sesuai standar")),
+        const SnackBar(
+          content: Text("Data yang dimasukin tidak sesuai standar"),
+        ),
       );
       return false;
     }
@@ -189,7 +188,8 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
     if (!_hasAtLeastOnePhoto()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text("Ambil minimal 1 foto hasil lab sebelum lanjut")),
+          content: Text("Ambil minimal 1 foto hasil lab sebelum lanjut"),
+        ),
       );
       return false;
     }
@@ -214,8 +214,8 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
         }
       }
 
-      String adjustedRegistStatus =
-          (widget.model.regist_status ?? "").toLowerCase();
+      String adjustedRegistStatus = (widget.model.regist_status ?? "")
+          .toLowerCase();
       if (adjustedRegistStatus == "qc_lab_hold") {
         adjustedRegistStatus = "qc_lab";
       }
@@ -228,6 +228,7 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
         "dobi": double.parse(dobCtrl.text.replaceAll(',', '.')),
         "iv": double.parse(ivCtrl.text.replaceAll(',', '.')),
         "remarks": remarksCtrl.text.trim(),
+         "remarks_hold": (isHoldCase) ? remarksHoldCtrl.text.trim() : null,
         "status": status,
         if (photos.isNotEmpty) "photos": photos,
       };
@@ -241,8 +242,8 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
       if (res.success == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  "QC Lab ${status.toUpperCase()} berhasil dikirim")),
+            content: Text("QC Lab ${status.toUpperCase()} berhasil dikirim"),
+          ),
         );
         Navigator.pop(context, {
           "registration_id": widget.model.registration_id,
@@ -259,19 +260,19 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
       debugPrint("DioException: ${e.response?.data}");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content:
-                Text("Error: ${e.response?.data['message'] ?? e.message}")),
+          content: Text("Error: ${e.response?.data['message'] ?? e.message}"),
+        ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
- void _confirm(String title, String msg, String status) {
+  void _confirm(String title, String msg, String status) {
     if (!_validateInputs()) return;
 
     showDialog(
@@ -329,7 +330,10 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
             padding: const EdgeInsets.all(16),
             children: [
               _plateWidget(widget.model.plate_number ?? "-"),
-              _readonlyBox("Nomor Tiket Timbang", widget.model.wb_ticket_no ?? "-"),
+              _readonlyBox(
+                "Nomor Tiket Timbang",
+                widget.model.wb_ticket_no ?? "-",
+              ),
               _readonlyBox("Supir", widget.model.driver_name ?? "-"),
               _readonlyBox("Kode Komoditi", widget.model.commodity_code ?? "-"),
               _readonlyBox("Nama Komoditi", widget.model.commodity_name ?? "-"),
@@ -342,10 +346,7 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
                 padding: EdgeInsets.symmetric(vertical: 6),
                 child: Text(
                   "Input QC Data",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                 ),
               ),
 
@@ -368,6 +369,8 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
 
               // Remarks full width
               _input("Remarks", remarksCtrl, maxLines: 2),
+              if(isHoldCase)
+              _input("Remarks", remarksHoldCtrl, maxLines: 2, isEnabled: true),
 
               const SizedBox(height: 12),
 
@@ -390,23 +393,18 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
                       children: [
                         const Text(
                           "Ambil Gambar Hasil Lab",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: TextStyle(fontWeight: FontWeight.w500),
                         ),
                         Checkbox(
                           value: isCameraEnabled,
-                          onChanged: isQcEnabled
-                              ? (v) {
-                                  setState(() {
-                                    isCameraEnabled = v ?? false;
-                                    if (!isCameraEnabled) {
-                                      _image1 = _image2 =
-                                          _image3 = _image4 = null;
-                                    }
-                                  });
-                                }
-                              : null,
+                          onChanged: (v) {
+                            setState(() {
+                              isCameraEnabled = v ?? false;
+                              if (!isCameraEnabled) {
+                                _image1 = _image2 = _image3 = _image4 = null;
+                              }
+                            });
+                          },
                         ),
                       ],
                     ),
@@ -430,16 +428,23 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                 _btn(
-                      "Hold",
-                      Colors.orange,
-                      () => _confirm("Hold", "Tahan QC?", "hold"),
-                      disabled: isHoldCase, // 🔥 otomatis disable kalau sudah HOLD
-                    ),
-                  _btn("Approve", Colors.green,
-                      () => _confirm("Approve", "Setujui QC?", "approved")),
-                  _btn("Reject", Colors.red,
-                      () => _confirm("Reject", "Tolak QC?", "rejected")),
+                  _btn(
+                    "Hold",
+                    Colors.orange,
+                    () => _confirm("Hold", "Tahan QC?", "hold"),
+                    disabled:
+                        isHoldCase, // 🔥 otomatis disable kalau sudah HOLD
+                  ),
+                  _btn(
+                    "Approve",
+                    Colors.green,
+                    () => _confirm("Approve", "Setujui QC?", "approved"),
+                  ),
+                  _btn(
+                    "Reject",
+                    Colors.red,
+                    () => _confirm("Reject", "Tolak QC?", "rejected"),
+                  ),
                 ],
               ),
             ],
@@ -458,24 +463,24 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
   }
 
   Widget _readonlyBox(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(k, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                border: Border.all(color: Colors.black54),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(v),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(k, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            border: Border.all(color: Colors.black54),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(v),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _plateWidget(String plate) {
     return Padding(
@@ -483,35 +488,28 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Plat Kendaraan",
-            style: TextStyle(fontSize: 14),
-          ),
+          const Text("Plat Kendaraan", style: TextStyle(fontSize: 14)),
           const SizedBox(height: 4),
           Text(
             plate,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-
-  Widget _input(String label, TextEditingController c, {int maxLines = 1}) {
+  Widget _input(String label, TextEditingController c, {int maxLines = 1, bool isEnabled = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: TextField(
         controller: c,
-        readOnly: !isQcEnabled,
+        readOnly: !isQcEnabled && !isEnabled,
         maxLines: maxLines,
         decoration: InputDecoration(
           labelText: label,
           filled: true,
-          fillColor: isQcEnabled ? Colors.white : Colors.grey.shade300,
+          fillColor: (isQcEnabled || isEnabled) ? Colors.white : Colors.grey.shade300,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
@@ -525,8 +523,7 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
       child: TextField(
         controller: c,
         readOnly: !isQcEnabled,
-        keyboardType:
-            const TextInputType.numberWithOptions(decimal: true),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
         ],
@@ -541,27 +538,24 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
   }
 
   Widget _cameraBox(int i, File? f) => GestureDetector(
-        onTap: isCameraEnabled ? () => _getImage(i) : null,
-        child: AspectRatio(
-          aspectRatio: 3 / 4,
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(),
-              borderRadius: BorderRadius.circular(8),
-              color: isCameraEnabled ? Colors.white : Colors.grey.shade400,
-            ),
-            child: f == null
-                ? const Icon(Icons.camera_alt)
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      f,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-          ),
+    onTap: isCameraEnabled ? () => _getImage(i) : null,
+    child: AspectRatio(
+      aspectRatio: 3 / 4,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(),
+          borderRadius: BorderRadius.circular(8),
+          color: isCameraEnabled ? Colors.white : Colors.grey.shade400,
         ),
-      );
+        child: f == null
+            ? const Icon(Icons.camera_alt)
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(f, fit: BoxFit.cover),
+              ),
+      ),
+    ),
+  );
 
   Widget _btn(
     String label,
@@ -573,9 +567,8 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
       style: ElevatedButton.styleFrom(
         backgroundColor: disabled ? Colors.grey : color,
       ),
-      onPressed: disabled || _isSubmitting || !isQcEnabled ? null : onPressed,
+      onPressed: disabled || _isSubmitting ? null : onPressed,
       child: Text(label),
     );
   }
-
 }

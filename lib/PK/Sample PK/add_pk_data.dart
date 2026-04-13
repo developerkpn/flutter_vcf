@@ -17,8 +17,8 @@ class AddPKDataPage extends StatefulWidget {
   final String registrationId;
   final String platKendaraan;
   final String tiketNo;
-  final String vendorCode;
-  final String vendorName;
+  final String? vendorCode;
+  final String? vendorName;
   final String commodityCode;
   final String commodityName;
 
@@ -29,8 +29,8 @@ class AddPKDataPage extends StatefulWidget {
     required this.registrationId,
     required this.platKendaraan,
     required this.tiketNo,
-    required this.vendorCode,
-    required this.vendorName,
+    this.vendorCode,
+    this.vendorName,
     required this.commodityCode,
     required this.commodityName,
   });
@@ -95,9 +95,18 @@ class _AddPKDataPageState extends State<AddPKDataPage> {
         loading = false;
       });
     } catch (e) {
-      setState(() => loading = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Load error: $e")));
+      debugPrint("Load error: $e");
+      setState(() {
+        records = <QcSamplingPkRecord>[];
+        activeCounter = 0;
+        newPhotos = List<File?>.filled(4, null);
+        sectionChecked = [false, false, false];
+        loading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Load error: $e")));
+      }
     }
   }
 
@@ -564,8 +573,8 @@ Future<void> _reloadPhotosForCounter(int counter) async {
         children: [
           _readonlyField("Plat Kendaraan", widget.platKendaraan),
           _readonlyField("Tiket Timbang", widget.tiketNo),
-          _readonlyField("Kode Vendor", widget.vendorCode),
-          _readonlyField("Nama Vendor", widget.vendorName),
+          _readonlyField("Kode Vendor", widget.vendorCode ?? "-"),
+          _readonlyField("Nama Vendor", widget.vendorName ?? "-"),
           _readonlyField("Kode Komoditi", widget.commodityCode),
           _readonlyField("Nama Komoditi", widget.commodityName),
           _section(0),
