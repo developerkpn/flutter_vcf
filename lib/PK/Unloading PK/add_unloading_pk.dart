@@ -6,15 +6,18 @@ import 'package:flutter_vcf/models/pk/response/unloading_pk_response.dart';
 import 'package:flutter_vcf/models/pk/unloading_pk_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'input_unloading_pk.dart';
+import 'unloading_pk.dart';
 
 class AddUnloadingPKPage extends StatefulWidget {
   final String userId;
   final String token;
+  final UnloadingPKStage stage;
 
   const AddUnloadingPKPage({
     super.key,
     required this.userId,
     required this.token,
+    this.stage = UnloadingPKStage.start,
   });
 
   @override
@@ -50,9 +53,13 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isFinishStage = widget.stage == UnloadingPKStage.finish;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tambah Unloading PK'),
+        title: Text(
+          isFinishStage ? 'Pilih Finish Unloading PK' : 'Tambah Unloading PK',
+        ),
         backgroundColor: Colors.blue,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
@@ -75,7 +82,36 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
 
           final readyVehicles = data.where((e) {
             final registStatus = (e.registStatus ?? "").toLowerCase();
-            return registStatus == "unloading" || registStatus == "qc_reunloading";
+            final counterLabel = (e.counterStatusLabel ?? "").toLowerCase();
+            final cycle = (e.cycle ?? e.counter ?? e.resamplingCounter ?? 0);
+            if (isFinishStage) {
+              if (registStatus == 'qc_resampling' || registStatus == 'qc_relab') {
+                return true;
+              }
+              if (counterLabel == 'unloading' ||
+                  counterLabel.startsWith('reunloading_')) {
+                return true;
+              }
+              return registStatus == "finish_unloading" ||
+                  registStatus == "finish_reunloading_1" ||
+              registStatus == "finish_reunloading_2" ||
+              cycle > 0;
+            }
+            if (registStatus == 'qc_resampling' || registStatus == 'qc_relab') {
+              return true;
+            }
+            // For start stage: exclude already approved reunloading
+            if (registStatus == "finish_reunloading_1" ||
+                registStatus == "finish_reunloading_2" ||
+                registStatus == "finish_unloading") {
+              return false;
+            }
+            if (counterLabel.startsWith('reunloading_')) {
+              return true;
+            }
+            return registStatus == "unloading" ||
+                registStatus == "start_unloading" ||
+                cycle > 0;
           }).toList();
 
           final uniquePlates = readyVehicles
@@ -103,7 +139,7 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Silakan Pilih Plat Kendaraan yang Siap Unloading PK',
+                  'Silakan Pilih Plat Kendaraan',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 12),
@@ -142,7 +178,7 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
                       ),
                     ),
                     label: const Text(
-                      "Lanjut ke Input Unloading PK",
+                      "Lanjut ke Input",
                       style: TextStyle(color: Colors.white, fontSize: 14),
                     ),
                     onPressed: selectedPlat == null
@@ -158,6 +194,7 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
                                 builder: (_) => InputUnloadingPKPage(
                                   model: kendaraan,
                                   token: widget.token,
+                                  stage: widget.stage,
                                 ),
                               ),
                             );

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
-// import 'package:flutter_vcf/models/pk/response/unloading_pk_statistics_response.dart';
 import '../../login.dart';
 import 'unloading_pk.dart';
 
@@ -79,53 +77,53 @@ class _HomeUnloadingPKPageState extends State<HomeUnloadingPKPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Text("Home VCF", style: TextStyle(color: Colors.white)),
-            const SizedBox(width: 5),
-
-            // Dropdown Navigasi
-            DropdownButton<String>(
-              dropdownColor: Colors.blue[100],
-              icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-              underline: const SizedBox(),
-              value: null,
-              hint: const SizedBox(),
-              onChanged: (String? newValue) {
-                if (newValue == "PK") {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => UnloadingPKPage(
-                        userId: widget.userId,
-                        token: widget.token,
-                      ),
-                    ),
-                  );
-                }
-              },
-              items: const [
-                DropdownMenuItem<String>(
-                  enabled: false,
-                  child: Row(
-                    children: [
-                      Text("Unloading", style: TextStyle(fontWeight: FontWeight.bold)),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_drop_down, size: 16),
-                    ],
-                  ),
-                ),
-                DropdownMenuItem<String>(value: "PK", child: Text("PK")),
-              ],
-            ),
-          ],
-        ),
+        title: const Text("Home VCF", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.blue,
         actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.arrow_drop_down_circle_outlined, color: Colors.white),
+            tooltip: 'Pilih menu unloading',
+            onSelected: (String value) {
+              if (value == 'START_PK') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UnloadingPKPage(
+                      userId: widget.userId,
+                      token: widget.token,
+                      stage: UnloadingPKStage.start,
+                    ),
+                  ),
+                );
+              }
+              if (value == 'FINISH_PK') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UnloadingPKPage(
+                      userId: widget.userId,
+                      token: widget.token,
+                      stage: UnloadingPKStage.finish,
+                    ),
+                  ),
+                );
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(
+                value: 'START_PK',
+                child: Text('Start Unloading PK'),
+              ),
+              PopupMenuItem<String>(
+                value: 'FINISH_PK',
+                child: Text('Finish Unloading PK'),
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: fetchUnloadingStatistics,
-          )
+          ),
         ],
       ),
 

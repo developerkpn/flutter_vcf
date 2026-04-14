@@ -78,6 +78,9 @@ class QcLabPkVehicle {
   @JsonKey(name: 'counter')
   final int? counter;
 
+  @JsonKey(name: 'counter_status_label')
+  final String? counterStatusLabel;
+
   QcLabPkVehicle({
     this.registrationId,
     this.wbTicketNo,
@@ -95,6 +98,7 @@ class QcLabPkVehicle {
     this.vendorFfa,
     this.vendorMoisture,
     this.counter,
+    this.counterStatusLabel,
     this.isRelab,
     this.labStatus,
   });
