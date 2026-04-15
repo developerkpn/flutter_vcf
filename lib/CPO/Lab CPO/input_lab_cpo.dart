@@ -144,7 +144,24 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
         _image4 != null;
   }
 
-  bool _validateInputs() {
+  bool _validateInputs(status) {
+
+    if (status == 'rejected' || status == 'hold') {
+      if (remarksCtrl.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Harap isi Remarks terlebih dahulu")),
+        );
+        return false;
+      }
+      
+      if (isHoldCase && remarksHoldCtrl.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Harap isi Remarks Hold terlebih dahulu")),
+        );
+        return false;
+      }
+    }
+
     if (ffaCtrl.text.isEmpty ||
         moistCtrl.text.isEmpty ||
         dobCtrl.text.isEmpty ||
@@ -198,7 +215,7 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
   }
 
   Future<void> _submit(String status) async {
-    if (!_validateInputs()) return;
+    if (!_validateInputs(status)) return;
 
     setState(() => _isSubmitting = true);
 
@@ -228,7 +245,7 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
         "dobi": double.parse(dobCtrl.text.replaceAll(',', '.')),
         "iv": double.parse(ivCtrl.text.replaceAll(',', '.')),
         "remarks": remarksCtrl.text.trim(),
-         "remarks_hold": (isHoldCase) ? remarksHoldCtrl.text.trim() : null,
+        "remarks_hold": (isHoldCase) ? remarksHoldCtrl.text.trim() : null,
         "status": status,
         if (photos.isNotEmpty) "photos": photos,
       };
@@ -273,7 +290,7 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
   }
 
   void _confirm(String title, String msg, String status) {
-    if (!_validateInputs()) return;
+    if (!_validateInputs(status)) return;
 
     showDialog(
       context: context,
@@ -369,8 +386,13 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
 
               // Remarks full width
               _input("Remarks", remarksCtrl, maxLines: 2),
-              if(isHoldCase)
-              _input("Remarks", remarksHoldCtrl, maxLines: 2, isEnabled: true),
+              if (isHoldCase)
+                _input(
+                  "Remarks",
+                  remarksHoldCtrl,
+                  maxLines: 2,
+                  isEnabled: true,
+                ),
 
               const SizedBox(height: 12),
 
@@ -499,7 +521,12 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
     );
   }
 
-  Widget _input(String label, TextEditingController c, {int maxLines = 1, bool isEnabled = false}) {
+  Widget _input(
+    String label,
+    TextEditingController c, {
+    int maxLines = 1,
+    bool isEnabled = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: TextField(
@@ -509,7 +536,9 @@ class _InputLabCPOPageState extends State<InputLabCPOPage> {
         decoration: InputDecoration(
           labelText: label,
           filled: true,
-          fillColor: (isQcEnabled || isEnabled) ? Colors.white : Colors.grey.shade300,
+          fillColor: (isQcEnabled || isEnabled)
+              ? Colors.white
+              : Colors.grey.shade300,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
