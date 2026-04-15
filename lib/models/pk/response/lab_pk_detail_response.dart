@@ -117,6 +117,16 @@ class LabPkRecord {
   final String? oilContent;
 
   final String? remarks;
+
+  @JsonKey(name: "remarks_hold")
+  final String? remarksHold;
+
+  @JsonKey(name: "remarks_hold_relab_1")
+  final String? remarksHoldRelab1;
+
+  @JsonKey(name: "remarks_hold_relab_2")
+  final String? remarksHoldRelab2;
+
   final String? status;
 
   @JsonKey(name: "tested_at")
@@ -139,6 +149,9 @@ class LabPkRecord {
     this.dirt,
     this.oilContent,
     this.remarks,
+    this.remarksHold,
+    this.remarksHoldRelab1,
+    this.remarksHoldRelab2,
     this.status,
     this.testedAt,
     this.testedBy,

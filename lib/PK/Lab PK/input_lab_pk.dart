@@ -27,6 +27,9 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
   final TextEditingController dirtCtrl = TextEditingController();
   final TextEditingController oilCtrl = TextEditingController();
   final TextEditingController remarksCtrl = TextEditingController();
+  final TextEditingController remarksHoldCtrl = TextEditingController();
+  final TextEditingController remarksHoldRelab1Ctrl = TextEditingController();
+  final TextEditingController remarksHoldRelab2Ctrl = TextEditingController();
 
   late ApiService api;
 
@@ -63,6 +66,7 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
     // Re-lab without explicit counter should default to counter 1.
     return _isRelab ? 1 : 0;
   }
+
   bool get _isRelab {
     final regist = (widget.model.registStatus ?? '').toLowerCase().trim();
     return widget.model.isRelab == true || regist.startsWith('qc_relab');
@@ -81,6 +85,7 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
     api = ApiService(AppConfig.createDio(withLogging: true));
 
     final status = _derivePkStatus(widget.model);
+    // final test = widget.model
     isHoldCase = status == "hold";
 
     debugPrint("=== INIT InputLabPKPage ===");
@@ -112,6 +117,9 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
     dirtCtrl.dispose();
     oilCtrl.dispose();
     remarksCtrl.dispose();
+    remarksHoldCtrl.dispose();
+    remarksHoldRelab1Ctrl.dispose();
+    remarksHoldRelab2Ctrl.dispose();
     super.dispose();
   }
 
@@ -256,6 +264,44 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
     } finally {
       if (mounted) setState(() => _isReloadingPhotos = false);
     }
+  }
+
+  Widget _remarkFormFields() {
+    final int counter = _currentSamplingCounter;
+
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          child: _input("Remarks", remarksCtrl, maxLines: 2),
+        ),
+
+        /// Row 4 — Remark Hold (Dinamis berdasarkan counter)
+        if (isHoldCase && counter == 0)
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: _input("Remark Hold", remarksHoldCtrl, maxLines: 2),
+          ),
+        if (isHoldCase && counter == 1)
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: _input(
+              "Remark Relab 1 Hold",
+              remarksHoldRelab1Ctrl,
+              maxLines: 2,
+            ),
+          ),
+        if (isHoldCase && counter == 2)
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: _input(
+              "Remark Relab 2 Hold",
+              remarksHoldRelab2Ctrl,
+              maxLines: 2,
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -461,10 +507,9 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
         ),
 
         /// Row 3 — Remarks (full width)
-        Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: _input("Remarks", remarksCtrl, maxLines: 2),
-        ),
+      
+
+        _remarkFormFields(),
       ],
     );
   }
@@ -474,11 +519,20 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
 
     String title = counter == 0 ? "Hasil Lab Awal" : "Hasil Re-Lab $counter";
 
-    final String ffa = record.ffa ?? "-";
-    final String moist = record.moisture ?? "-";
-    final String dirt = record.dirt ?? "-";
-    final String oil = record.oilContent ?? "-";
+    final String ffa = record.ffa?.toString() ?? "-";
+    final String moist = record.moisture?.toString() ?? "-";
+    final String dirt = record.dirt?.toString() ?? "-";
+    final String oil = record.oilContent?.toString() ?? "-";
+    
+    // Ambil data remarks
     final String remarks = record.remarks ?? "";
+    
+    // CATATAN PENTING: 
+    // Pastikan penamaan di bawah ini (remarksHold, remarksHoldRelab1, dst)
+    // sudah persis sama dengan property yang ada di dalam class Model Dart Anda.
+    final String remarkHold = record.remarksHold ?? "";
+    final String remarkHoldRelab1 = record.remarksHoldRelab1 ?? "";
+    final String remarkHoldRelab2 = record.remarksHoldRelab2 ?? "";
 
     final List<String> photoUrls =
         (record.photos as List<dynamic>?)
@@ -525,10 +579,27 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
           ),
           const SizedBox(height: 8),
 
-          /// Remarks full width
-          _readonlyInputBox("Remarks", remarks),
+          /// Remarks General (Selalu tampil jika isinya tidak kosong)
+          if (remarks.isNotEmpty) ...[
+            _readonlyInputBox("Remarks", remarks),
+            const SizedBox(height: 8),
+          ],
 
-          const SizedBox(height: 12),
+          /// Remark Hold (Tampil menyesuaikan dengan tipe counter sesi ini)
+          if (counter == 0 && remarkHold.isNotEmpty) ...[
+            _readonlyInputBox("Remark Hold (Awal)", remarkHold),
+            const SizedBox(height: 8),
+          ],
+          if (counter == 1 && remarkHoldRelab1.isNotEmpty) ...[
+            _readonlyInputBox("Remark Hold (Re-Lab 1)", remarkHoldRelab1),
+            const SizedBox(height: 8),
+          ],
+          if (counter == 2 && remarkHoldRelab2.isNotEmpty) ...[
+            _readonlyInputBox("Remark Hold (Re-Lab 2)", remarkHoldRelab2),
+            const SizedBox(height: 8),
+          ],
+
+          const SizedBox(height: 4),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -850,6 +921,15 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
         "status": status,
         if (photos.isNotEmpty) "photos": photos,
       };
+
+      final int counter = _currentSamplingCounter;
+      if (isHoldCase && counter == 0 && remarksHoldCtrl.text.isNotEmpty) {
+        payload["remarks_hold"] = remarksHoldCtrl.text.trim();
+      } else if (isHoldCase && counter == 1 && remarksHoldRelab1Ctrl.text.isNotEmpty) {
+        payload["remarks_hold_relab_1"] = remarksHoldRelab1Ctrl.text.trim();
+      } else if (isHoldCase && counter == 2 && remarksHoldRelab2Ctrl.text.isNotEmpty) {
+        payload["remarks_hold_relab_2"] = remarksHoldRelab2Ctrl.text.trim();
+      }
 
       debugPrint("Payload:");
       debugPrint(const JsonEncoder.withIndent('  ').convert(payload));
