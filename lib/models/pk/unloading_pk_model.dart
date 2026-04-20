@@ -85,6 +85,9 @@ class UnloadingPkModel {
   @JsonKey(name: "counter_status_label")
   final String? counterStatusLabel;
 
+  @JsonKey(name: "lab_status")
+  final String? labStatus;
+
   @JsonKey(name: "operator_id")
   final String? operatorId;
 
@@ -128,6 +131,7 @@ class UnloadingPkModel {
     this.counter,
     this.resamplingCounter,
     this.counterStatusLabel,
+    this.labStatus,
     this.operatorId,
     this.hasUnloadingData,
     this.vendorFfa,

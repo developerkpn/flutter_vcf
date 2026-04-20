@@ -31,7 +31,6 @@ class InputUnloadingPOMEPage extends StatefulWidget {
 class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
   final TextEditingController remarksCtrl = TextEditingController();
   final double baseFont = 15;
-  static const bool _holdFeatureEnabled = false;
 
   bool disableHoldButton = false;
   bool unloadingStarted = false;
@@ -70,8 +69,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
         (widget.model.regist_status ?? '').toLowerCase().trim();
     final startStatus =
         (widget.model.unloading_status ?? '').toLowerCase().trim();
-    final finishStatus =
-        (widget.model.unloading_2_status ?? '').toLowerCase().trim();
 
     if (latestStatus == widget.stage.holdStatus ||
         registStatus == widget.stage.holdStatus) {
@@ -200,6 +197,24 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
     }).toList();
   }
 
+  bool _hasAtLeastOneNewPhoto() {
+    return _image1 != null ||
+        _image2 != null ||
+        _image3 != null ||
+        _image4 != null;
+  }
+
+  bool _ensureAtLeastOneNewPhoto(String actionLabel) {
+    if (_hasAtLeastOneNewPhoto()) return true;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Ambil minimal 1 foto baru sebelum $actionLabel"),
+      ),
+    );
+    return false;
+  }
+
   Future<bool> _startUnloading() async {
     if (_isHoldTicket()) return true;
     if (unloadingStarted) return true;
@@ -266,17 +281,8 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
     );
   }
 
-  Future<void> _confirmAndSubmit(String status) async {
-    if (!await _startUnloading()) return;
-
-    await _showConfirmDialog(
-      title: "Konfirmasi Simpan",
-      message: "Apakah anda yakin menyimpan data Unloading?",
-      onConfirm: () => _submit(status),
-    );
-  }
-
   Future<void> _confirmAndFinish() async {
+    if (!_ensureAtLeastOneNewPhoto("approve unloading")) return;
     if (!await _startUnloading()) return;
 
     await _showConfirmDialog(
@@ -284,70 +290,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
       message: "Apakah anda yakin menyelesaikan unloading?",
       onConfirm: _finishUnloading,
     );
-  }
-
-  Future<void> _submit(String status) async {
-    if (_isSubmitting) return;
-
-    setState(() => _isSubmitting = true);
-
-    final photos = _collectPhotosBase64();
-
-    final payload = {
-      "registration_id": widget.model.registration_id,
-      "status": status,
-      "tank_id": selectedTankId,
-      "hole_id": selectedHoleId,
-      "remarks": remarksCtrl.text.trim(),
-      if (photos.isNotEmpty) "photos": photos,
-    };
-
-    log(
-      '[POME ${widget.stage.name}] submit regId=${widget.model.registration_id} '
-      'ticket=${widget.model.wb_ticket_no} status=$status '
-      'tank=$selectedTankId hole=$selectedHoleId photos=${photos.length}',
-      name: 'unloading_pome_submit',
-    );
-
-    try {
-      final res = widget.stage == UnloadingPOMEStage.start
-          ? await api.submitUnloadingPome(
-              "Bearer ${widget.token}",
-              payload,
-            )
-          : await api.submitFinishUnloadingPome(
-              "Bearer ${widget.token}",
-              payload,
-            );
-
-      log(
-        '[POME ${widget.stage.name}] submit response success=${res.success} '
-        'message=${res.message}',
-        name: 'unloading_pome_submit',
-      );
-
-      if (res.success) {
-        if (!mounted) return;
-        Navigator.pop(context, {
-          "registration_id": widget.model.registration_id,
-          "plate_number": widget.model.plate_number,
-          "wb_ticket_no": widget.model.wb_ticket_no,
-          "status": status,
-        });
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res.message ?? "Gagal submit")),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
   }
 
   Future<void> _finishUnloading() async {

@@ -37,7 +37,6 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
   bool isHoldCase = false;
   bool isQcEnabled = true;
   bool isCameraEnabled = false;
-  bool _forceNotRelab = false;
   bool _isReloadingPhotos = false;
 
   /// File foto baru
@@ -75,9 +74,6 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
   bool get _isHoldRelab => isHoldCase && (widget.model.counter ?? 0) > 0;
   bool get _isHoldInitial => isHoldCase && (widget.model.counter ?? 0) == 0;
 
-  // max 4 foto
-  int _getMaxPhotoAllowed() => 4;
-
   @override
   void initState() {
     super.initState();
@@ -97,12 +93,6 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
     debugPrint("derived status: $status");
     debugPrint("isHoldCase: $isHoldCase");
     debugPrint("=============================");
-
-    //  if (isHoldCase) {
-    //     _forceNotRelab = true;
-    //     isQcEnabled = true;
-    //   }
-
     if (_isRelab || isHoldCase) {
       _loadLabPkDetail();
     } else {
@@ -844,24 +834,76 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
   }
 
   bool _validateInputs(String status) {
-    // CASE HOLD — data sudah ada, tidak wajib foto baru
-    if (isHoldCase) {
-      if (ffaCtrl.text.isEmpty ||
-          moistCtrl.text.isEmpty ||
-          dirtCtrl.text.isEmpty ||
-          oilCtrl.text.isEmpty) {
+    final remark = remarksCtrl.text.trim();
+    final action = status.toLowerCase();
+
+    if (action == "hold") {
+      if (isHoldCase) {
+        final int counter = _currentSamplingCounter;
+        String holdRemark = "";
+        String label = "Remark Hold";
+
+        if (counter == 0) {
+          holdRemark = remarksHoldCtrl.text.trim();
+          label = "Remark Hold";
+        } else if (counter == 1) {
+          holdRemark = remarksHoldRelab1Ctrl.text.trim();
+          label = "Remark Hold Re-Lab 1";
+        } else if (counter == 2) {
+          holdRemark = remarksHoldRelab2Ctrl.text.trim();
+          label = "Remark Hold Re-Lab 2";
+        } else {
+          holdRemark = remark;
+          label = "Remark";
+        }
+
+        if (holdRemark.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("$label wajib diisi saat Hold")),
+          );
+          return false;
+        }
+      } else if (remark.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Data FFA, Moisture, Dirt & Oil Content kosong"),
-          ),
+          const SnackBar(content: Text("Remark wajib diisi saat Hold")),
+        );
+        return false;
+      }
+    }
+
+    if (action == "rejected") {
+      if (remark.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Remark wajib diisi saat Reject")),
         );
         return false;
       }
 
-      return true;
+      if (isHoldCase) {
+        final int counter = _currentSamplingCounter;
+        String holdRemark = "";
+        String label = "Remark Hold";
+
+        if (counter == 0) {
+          holdRemark = remarksHoldCtrl.text.trim();
+          label = "Remark Hold";
+        } else if (counter == 1) {
+          holdRemark = remarksHoldRelab1Ctrl.text.trim();
+          label = "Remark Hold Re-Lab 1";
+        } else if (counter == 2) {
+          holdRemark = remarksHoldRelab2Ctrl.text.trim();
+          label = "Remark Hold Re-Lab 2";
+        }
+
+        if (holdRemark.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("$label wajib diisi saat Reject")),
+          );
+          return false;
+        }
+      }
     }
 
-    // Normal lab & relab wajib diisi
     if (ffaCtrl.text.isEmpty ||
         moistCtrl.text.isEmpty ||
         dirtCtrl.text.isEmpty ||
@@ -875,7 +917,7 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
     // Minimal 1 foto
     if (!_hasAtLeastOnePhoto()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Minimal ambil 1 foto hasil lab")),
+        const SnackBar(content: Text("Minimal ambil 1 foto baru hasil lab")),
       );
       return false;
     }
@@ -999,19 +1041,6 @@ class _InputLabPKPageState extends State<InputLabPKPage> {
             },
             child: const Text("Ya"),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _readonlyRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Expanded(child: Text(label)),
-          const SizedBox(width: 8),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
       ),
     );

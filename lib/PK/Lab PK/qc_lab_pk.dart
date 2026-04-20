@@ -71,7 +71,9 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
+      if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -94,6 +96,13 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
     final regist = (v.registStatus ?? '').toLowerCase().trim();
     final backendLabel = (v.counterStatusLabel ?? '').toLowerCase().trim();
     final counter = (v.counter ?? 0).clamp(0, 2);
+
+    if (regist == 'qc_lab_hold') return 'qc_lab_hold';
+
+    if (regist == 'start_reunloading_1') return 'start_reunloading_1';
+    if (regist == 'finish_reunloading_1') return 'finish_reunloading_1';
+    if (regist == 'start_reunloading_2') return 'start_reunloading_2';
+    if (regist == 'finish_reunloading_2') return 'finish_reunloading_2';
 
     if (regist == 'qc_resampling') {
       return counter == 2 ? 'resampling_2' : 'resampling_1';
@@ -143,11 +152,13 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
 
   bool isClickable(String status) {
     // hold + relab dapat diklik
-    return ["hold", "relab_1", "relab_2"].contains(status);
+    return ["hold", "qc_lab_hold", "relab_1", "relab_2"].contains(status);
   }
 
   String statusLabel(String s) {
     switch (s) {
+      case 'qc_lab_hold':
+        return 'QC LAB HOLD';
       case 'pending_manager_approval':
         return 'Pending Manager Approval';
       case 'cancel':
@@ -161,9 +172,17 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
       case 'relab_2':
         return 'RE-LAB 2';
       case 'reunloading_1':
-        return 'REUNLOADING 1';
+        return 'START REUNLOADING 1';
       case 'reunloading_2':
-        return 'REUNLOADING 2';
+        return 'START REUNLOADING 2';
+      case 'start_reunloading_1':
+        return 'START REUNLOADING 1';
+      case 'start_reunloading_2':
+        return 'START REUNLOADING 2';
+      case 'finish_reunloading_1':
+        return 'FINISH REUNLOADING 1';
+      case 'finish_reunloading_2':
+        return 'FINISH REUNLOADING 2';
       default:
         return s.toUpperCase();
     }
@@ -174,6 +193,7 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
       case "approved":
         return Colors.green;
       case "hold":
+      case "qc_lab_hold":
         return Colors.orange;
       case "resampling_1":
       case "resampling_2":
@@ -184,8 +204,13 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
       case "relab_1":
       case "relab_2":
         return Colors.indigo;
+      case "start_reunloading_1":
+      case "start_reunloading_2":
       case "reunloading_1":
       case "reunloading_2":
+        return Colors.brown;
+      case "finish_reunloading_1":
+      case "finish_reunloading_2":
         return Colors.orange;
       case "pending_manager_approval":
         return Colors.yellow.shade700;
@@ -199,6 +224,7 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
       case "approved":
         return Icons.check_circle_outline;
       case "hold":
+      case "qc_lab_hold":
         return Icons.pause_circle_outline;
       case "resampling_1":
         return Icons.refresh;
@@ -212,9 +238,14 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
       case "relab_2":
         return Icons.science_outlined;
       case "reunloading_1":
+      case "start_reunloading_1":
         return Icons.refresh;
       case "reunloading_2":
+      case "start_reunloading_2":
         return Icons.loop;
+      case "finish_reunloading_1":
+      case "finish_reunloading_2":
+        return Icons.check_circle_outline;
       case "pending_manager_approval":
         return Icons.error_outline;
       default:
@@ -273,7 +304,9 @@ class _QCLabPKPageState extends State<QCLabPKPage> {
                       title: Text("Tiket: ${t.wbTicketNo ?? '-'}"),
                       subtitle: Text("Plat: ${t.plateNumber ?? '-'}"),
                       trailing: Chip(
-                        backgroundColor: statusColor(status).withOpacity(0.15),
+                        backgroundColor: statusColor(
+                          status,
+                        ).withValues(alpha: 0.15),
                         side: BorderSide(color: statusColor(status)),
                         label: Row(
                           mainAxisSize: MainAxisSize.min,

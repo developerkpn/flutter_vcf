@@ -31,7 +31,6 @@ class InputUnloadingCPOPage extends StatefulWidget {
 class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
   final TextEditingController remarksCtrl = TextEditingController();
   final double baseFont = 15;
-  static const bool _holdFeatureEnabled = false;
   bool disableHoldButton = false;
 
   File? _image1, _image2, _image3, _image4;
@@ -66,7 +65,6 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
     final latestStatus = (widget.model.latest_status ?? '').toLowerCase().trim();
     final registStatus = (widget.model.regist_status ?? '').toLowerCase().trim();
     final startStatus = (widget.model.unloading_status ?? '').toLowerCase().trim();
-    final finishStatus = (widget.model.unloading_2_status ?? '').toLowerCase().trim();
 
     if (latestStatus == widget.stage.holdStatus ||
         registStatus == widget.stage.holdStatus) {
@@ -193,6 +191,24 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
     }).toList();
     return picked;
   }
+
+  bool _hasAtLeastOneNewPhoto() {
+    return _image1 != null ||
+        _image2 != null ||
+        _image3 != null ||
+        _image4 != null;
+  }
+
+  bool _ensureAtLeastOneNewPhoto(String actionLabel) {
+    if (_hasAtLeastOneNewPhoto()) return true;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Ambil minimal 1 foto baru sebelum $actionLabel"),
+      ),
+    );
+    return false;
+  }
 //   String fixUrl(String? url, String? path) {
 //   if (url != null && url.startsWith("http")) {
 //     return url.replaceFirst("http://localhost", "http://172.30.64.221:8000");
@@ -257,16 +273,8 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
     );
   }
 
-  Future<void> _confirmAndSubmit(String status) async {
-    if (!await _startUnloading()) return;
-    await _showConfirmDialog(
-      title: "Konfirmasi Simpan",
-      message: "Apakah anda yakin menyimpan data Unloading?",
-      onConfirm: () => _submit(status),
-    );
-  }
-
   Future<void> _confirmAndFinish() async {
+    if (!_ensureAtLeastOneNewPhoto("approve unloading")) return;
     if (!await _startUnloading()) return;
     await _showConfirmDialog(
       title: "Konfirmasi Selesai",
@@ -275,68 +283,6 @@ class _InputUnloadingCPOPageState extends State<InputUnloadingCPOPage> {
     );
   }
 
-  Future<void> _submit(String status) async {
-    if (_isSubmitting) return;
-    setState(() => _isSubmitting = true);
-
-    final photos = _collectPhotosBase64(max: 4);
-
-    final payload = {
-      "registration_id": widget.model.registration_id,
-      "status": status,
-      "tank_id": selectedTankId,
-      "hole_id": selectedHoleId,
-      "remarks": remarksCtrl.text.trim(),
-      if (photos.isNotEmpty) "photos": photos,
-    };
-
-    log(
-      '[CPO ${widget.stage.name}] submit regId=${widget.model.registration_id} '
-      'ticket=${widget.model.wb_ticket_no} status=$status '
-      'tank=$selectedTankId hole=$selectedHoleId photos=${photos.length}',
-      name: 'unloading_cpo_submit',
-    );
-
-    try {
-      final res = widget.stage == UnloadingCPOStage.start
-          ? await api.submitUnloadingStatus(
-              "Bearer ${widget.token}",
-              payload,
-            )
-          : await api.submitFinishUnloadingCpoStatus(
-              "Bearer ${widget.token}",
-              payload,
-            );
-
-      log(
-        '[CPO ${widget.stage.name}] submit response success=${res.success} '
-        'message=${res.message}',
-        name: 'unloading_cpo_submit',
-      );
-
-      if (res.success) {
-        if (!mounted) return;
-        Navigator.pop(context, {
-          "registration_id": widget.model.registration_id,
-          "plate_number": widget.model.plate_number,
-          "wb_ticket_no": widget.model.wb_ticket_no,
-          "status": status,
-        });
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res.message ?? "Gagal submit")),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
-  }
   Future<void> _finishUnloading() async {
     if (_isSubmitting) return;
     setState(() => _isSubmitting = true);

@@ -147,6 +147,13 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
     }
   }
 
+  bool _hasAtLeastOnePhoto() {
+    return _image1 != null ||
+        _image2 != null ||
+        _image3 != null ||
+        _image4 != null;
+  }
+
   bool _validateInputs(status) {
     if (status == 'rejected' || status == 'hold') {
       if (remarksCtrl.text.trim().isEmpty) {
@@ -185,6 +192,15 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
     if (ffa < 0 || ffa > 100 || moisture < 0 || moisture > 100) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Nilai FFA/Moisture di luar batas wajar")),
+      );
+      return false;
+    }
+
+    if (!_hasAtLeastOnePhoto()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Ambil minimal 1 foto baru hasil lab sebelum lanjut"),
+        ),
       );
       return false;
     }

@@ -65,34 +65,42 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
       final List<QcSamplingPkVehicle> vehicles =
           res.data ?? <QcSamplingPkVehicle>[];
 
-      final filtered =
-          vehicles
-              .where(
-                (e) => e.has_sampling_data == true || (e.counter ?? 0) > 0,
-              )
-              .toList();
+      final filtered = vehicles
+          .where((e) => e.has_sampling_data == true || (e.counter ?? 0) > 0)
+          .toList();
 
       final list = filtered.map((e) {
         final String registStatus = (e.regist_status).toLowerCase().trim();
         final int samplingCounter = (e.counter ?? 0).clamp(0, 2);
-        final String backendLabel =
-            (e.counter_status_label ?? '').toLowerCase().trim();
+        final String backendLabel = (e.counter_status_label ?? '')
+            .toLowerCase()
+            .trim();
 
-        final String status = registStatus == "qc_resampling"
+        final String status = registStatus == "qc_lab_hold"
+            ? "qc_lab_hold"
+            : registStatus == "start_reunloading_1"
+            ? "start_reunloading_1"
+            : registStatus == "finish_reunloading_1"
+            ? "finish_reunloading_1"
+            : registStatus == "start_reunloading_2"
+            ? "start_reunloading_2"
+            : registStatus == "finish_reunloading_2"
+            ? "finish_reunloading_2"
+            : registStatus == "qc_resampling"
             ? (samplingCounter == 2 ? "resampling_2" : "resampling_1")
             : registStatus == "qc_relab"
-                ? (samplingCounter == 2 ? "relab_2" : "relab_1")
-                : backendLabel.startsWith("resampling_") ||
-                        backendLabel.startsWith("relab_") ||
-                        backendLabel.startsWith("reunloading_")
-                    ? backendLabel
-                    : samplingCounter == 2
-                        ? "resampling_2"
-                        : samplingCounter == 1
-                            ? "resampling_1"
-                            : (registStatus == "random_check"
-                                ? "PENDING_MANAGER_APPROVAL"
-                                : "DONE");
+            ? (samplingCounter == 2 ? "relab_2" : "relab_1")
+            : backendLabel.startsWith("resampling_") ||
+                  backendLabel.startsWith("relab_") ||
+                  backendLabel.startsWith("reunloading_")
+            ? backendLabel
+            : samplingCounter == 2
+            ? "resampling_2"
+            : samplingCounter == 1
+            ? "resampling_1"
+            : (registStatus == "random_check"
+                  ? "PENDING_MANAGER_APPROVAL"
+                  : "DONE");
 
         return {
           "registration_id": e.registration_id,
@@ -117,7 +125,9 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
       await prefs.remove(_kCacheKey);
       await saveTicketsCache();
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
+      if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Error fetch: $e")));
@@ -139,16 +149,28 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
 
   bool _isReunloadingStatus(String status) {
     final normalized = status.toLowerCase().trim();
-    return normalized == "reunloading_1" || normalized == "reunloading_2";
+    return normalized == "reunloading_1" ||
+        normalized == "reunloading_2" ||
+        normalized == "start_reunloading_1" ||
+        normalized == "start_reunloading_2" ||
+        normalized == "finish_reunloading_1" ||
+        normalized == "finish_reunloading_2";
   }
 
   Color _getStatusColor(Map item) {
     final status = ((item["status"] as String?) ?? "").toLowerCase().trim();
+    if (status == "qc_lab_hold") {
+      return Colors.orange;
+    }
     if (_isResamplingStatus(status)) {
       return Colors.purple;
     }
     if (_isRelabStatus(status)) {
       return Colors.indigo;
+    }
+    if (status == 'start_reunloading_1' || status == 'start_reunloading_2' ||
+        status == 'reunloading_1' || status == 'reunloading_2') {
+      return Colors.brown;
     }
     if (_isReunloadingStatus(status)) {
       return Colors.orange;
@@ -160,11 +182,14 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
   }
 
   Color _getStatusBg(Map item) {
-    return _getStatusColor(item).withOpacity(0.15);
+    return _getStatusColor(item).withValues(alpha: 0.15);
   }
 
   IconData _getStatusIcon(Map item) {
     final status = ((item["status"] as String?) ?? "").toLowerCase().trim();
+    if (status == "qc_lab_hold") {
+      return Icons.pause_circle_outline;
+    }
     if (status == "resampling_2") {
       return Icons.loop;
     }
@@ -177,10 +202,16 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
     if (status == "relab_1") {
       return Icons.biotech_outlined;
     }
-    if (status == "reunloading_2") {
+    if (status == "finish_reunloading_2") {
+      return Icons.check_circle_outline;
+    }
+    if (status == "start_reunloading_2" || status == "reunloading_2") {
       return Icons.loop;
     }
-    if (status == "reunloading_1") {
+    if (status == "finish_reunloading_1") {
+      return Icons.check_circle_outline;
+    }
+    if (status == "start_reunloading_1" || status == "reunloading_1") {
       return Icons.refresh;
     }
     if (status == "pending_manager_approval") {
@@ -191,6 +222,9 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
 
   String _getStatusLabel(Map item) {
     final status = ((item["status"] as String?) ?? "").toLowerCase().trim();
+    if (status == "qc_lab_hold") {
+      return "QC LAB HOLD";
+    }
     if (status == "resampling_2") {
       return "RESAMPLING 2";
     }
@@ -203,11 +237,23 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
     if (status == "relab_1") {
       return "RE-LAB 1";
     }
+    if (status == "start_reunloading_2") {
+      return "START REUNLOADING 2";
+    }
+    if (status == "finish_reunloading_2") {
+      return "FINISH REUNLOADING 2";
+    }
+    if (status == "start_reunloading_1") {
+      return "START REUNLOADING 1";
+    }
+    if (status == "finish_reunloading_1") {
+      return "FINISH REUNLOADING 1";
+    }
     if (status == "reunloading_2") {
-      return "REUNLOADING 2";
+      return "START REUNLOADING 2";
     }
     if (status == "reunloading_1") {
-      return "REUNLOADING 1";
+      return "START REUNLOADING 1";
     }
     if (status == "pending_manager_approval") {
       return "Pending Manager Approval";
@@ -244,7 +290,9 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
                   return InkWell(
                     onTap: () {
                       // Hanya tiket yang statusnya RE-SAMPLING yang boleh dibuka untuk re-sample
-                      if (_isResamplingStatus(item["status"] as String? ?? "")) {
+                      if (_isResamplingStatus(
+                        item["status"] as String? ?? "",
+                      )) {
                         Navigator.push(
                           context,
                           MaterialPageRoute(

@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_vcf/PK/Sample%20PK/sample_qc_pk.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_vcf/api_service.dart';
@@ -133,9 +132,9 @@ class _AddPKDataPageState extends State<AddPKDataPage> {
     }
 
     final filledCount = newPhotos.where((f) => f != null).length;
-    if (filledCount < 2) {
+    if (filledCount < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Minimal 2 foto wajib di-upload.")),
+        const SnackBar(content: Text("Minimal 1 foto baru wajib di-upload.")),
       );
       return;
     }
@@ -330,32 +329,6 @@ Future<void> _reloadPhotosForCounter(int counter) async {
                   child: Image.file(img, fit: BoxFit.cover),
                 ),
         ),
-      ),
-    );
-  }
-
-  Widget _newPhotoBox(int index, bool enabled) {
-    final f = newPhotos[index];
-    return GestureDetector(
-      onTap: enabled ? () => pickPhoto(index) : null,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: enabled ? Colors.black45 : Colors.grey.shade400,
-          ),
-          borderRadius: BorderRadius.circular(8),
-          color: enabled ? Colors.white : Colors.grey.shade300,
-        ),
-        child: f == null
-            ? Icon(
-                Icons.camera_alt,
-                size: 28,
-                color: enabled ? Colors.grey[800] : Colors.grey[500],
-              )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(f, fit: BoxFit.cover),
-              ),
       ),
     );
   }

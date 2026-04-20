@@ -42,6 +42,47 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
     return prefs.getString("jwt_token") ?? widget.token;
   }
 
+  String _unloadingStatus(UnloadingPkModel item) =>
+      (item.unloadingStatus ?? '').toLowerCase().trim();
+
+  bool _isReadyForStart(UnloadingPkModel item) {
+    final registStatus = (item.registStatus ?? '').toLowerCase();
+
+    // Backend now prepares pending row per active cycle.
+    // Only rows with null/empty unloading_status are truly "belum start".
+    if (_unloadingStatus(item).isNotEmpty) {
+      return false;
+    }
+
+    return registStatus == 'start_unloading' ||
+        registStatus == 'start_reunloading_1' ||
+        registStatus == 'start_reunloading_2' ||
+        registStatus == 'finish_unloading' ||
+        registStatus == 'finish_reunloading_1' ||
+        registStatus == 'finish_reunloading_2' ||
+        registStatus == 'qc_resampling' ||
+        registStatus == 'qc_relab';
+  }
+
+  bool _isReadyForFinish(UnloadingPkModel item) {
+    final registStatus = (item.registStatus ?? '').toLowerCase();
+    final counterLabel = (item.counterStatusLabel ?? '').toLowerCase();
+    final cycle = (item.cycle ?? item.counter ?? item.resamplingCounter ?? 0);
+
+    if (_unloadingStatus(item) != 'approved') {
+      return false;
+    }
+
+    return registStatus == 'start_unloading' ||
+        registStatus == 'start_reunloading_1' ||
+        registStatus == 'start_reunloading_2' ||
+        registStatus == 'qc_resampling' ||
+        registStatus == 'qc_relab' ||
+        counterLabel == 'unloading' ||
+        counterLabel.startsWith('reunloading_') ||
+        cycle > 0;
+  }
+
   void _loadData() async {
     final token = await _getToken();
     final apiService = ApiService(AppConfig.createDio());
@@ -80,39 +121,9 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
 
           final data = snapshot.data?.data ?? [];
 
-          final readyVehicles = data.where((e) {
-            final registStatus = (e.registStatus ?? "").toLowerCase();
-            final counterLabel = (e.counterStatusLabel ?? "").toLowerCase();
-            final cycle = (e.cycle ?? e.counter ?? e.resamplingCounter ?? 0);
-            if (isFinishStage) {
-              if (registStatus == 'qc_resampling' || registStatus == 'qc_relab') {
-                return true;
-              }
-              if (counterLabel == 'unloading' ||
-                  counterLabel.startsWith('reunloading_')) {
-                return true;
-              }
-              return registStatus == "finish_unloading" ||
-                  registStatus == "finish_reunloading_1" ||
-              registStatus == "finish_reunloading_2" ||
-              cycle > 0;
-            }
-            if (registStatus == 'qc_resampling' || registStatus == 'qc_relab') {
-              return true;
-            }
-            // For start stage: exclude already approved reunloading
-            if (registStatus == "finish_reunloading_1" ||
-                registStatus == "finish_reunloading_2" ||
-                registStatus == "finish_unloading") {
-              return false;
-            }
-            if (counterLabel.startsWith('reunloading_')) {
-              return true;
-            }
-            return registStatus == "unloading" ||
-                registStatus == "start_unloading" ||
-                cycle > 0;
-          }).toList();
+          final readyVehicles = data
+              .where(isFinishStage ? _isReadyForFinish : _isReadyForStart)
+              .toList();
 
           final uniquePlates = readyVehicles
               .map((e) => e.plateNumber)
@@ -149,7 +160,7 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
                     border: OutlineInputBorder(),
                     labelText: 'Plat Kendaraan',
                   ),
-                  value: selectedPlat,
+                  initialValue: selectedPlat,
                   items: uniquePlates.map((plate) {
                     final item = readyVehicles.firstWhere(
                       (e) => e.plateNumber == plate,
@@ -199,6 +210,7 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
                               ),
                             );
 
+                            if (!context.mounted) return;
                             if (result != null) {
                               Navigator.pop(context, result);
                             }

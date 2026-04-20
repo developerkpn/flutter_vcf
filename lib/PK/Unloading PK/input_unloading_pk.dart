@@ -7,6 +7,8 @@ import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/master/response/master_hole_response.dart';
 import 'package:flutter_vcf/models/master/response/master_tank_response.dart';
+import 'package:flutter_vcf/models/pk/response/lab_pk_detail_response.dart';
+import 'package:flutter_vcf/models/pk/response/unloading_pk_detail_response.dart';
 import 'package:flutter_vcf/models/pk/unloading_pk_model.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -53,6 +55,9 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   String? startTankName;
   String? startHoleName;
   String? startRemarks;
+  List<String>? startPhotoUrls;
+  List<UnloadingPkHistory> finishStartHistories = [];
+  List<UnloadingPkHistory> startPreviousHistories = [];
 
   // Previous data (for cycle > 1 at start, or for finish previous attempt)
   int? previousTankId;
@@ -63,12 +68,16 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   String? previousHoleName;
   String? previousRemarks;
   List<String>? previousPhotoUrls;
+  String? finishLabStatus;
+  int? finishLabCounter;
 
   bool get _isFinishStage => widget.stage == UnloadingPKStage.finish;
   bool get _isStartStage => widget.stage == UnloadingPKStage.start;
 
   int get _photoCount =>
       [_image1, _image2, _image3, _image4].where((e) => e != null).length;
+
+  bool get _hasAtLeastOneNewPhoto => _photoCount > 0;
 
   @override
   void initState() {
@@ -77,6 +86,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     api = ApiService(_dio);
     if (_isFinishStage) {
       _loadStartDetail();
+      _loadFinishLabState();
     } else {
       _loadMasterData();
       // Load previous data for start stage
@@ -88,6 +98,162 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   void dispose() {
     remarksCtrl.dispose();
     super.dispose();
+  }
+
+  bool _hasStartHistoryData(UnloadingPkHistory? item) {
+    if (item == null) return false;
+    if ((item.unloadingId ?? '').isEmpty) return false;
+    if (item.tankId != null || item.holeId != null) return true;
+    if (_normalize(item.status).isNotEmpty) return true;
+    if ((item.startTime ?? '').trim().isNotEmpty) return true;
+    if ((item.endTime ?? '').trim().isNotEmpty) return true;
+    if ((item.remarks ?? '').trim().isNotEmpty) return true;
+    return item.photos?.isNotEmpty ?? false;
+  }
+
+  UnloadingPkHistory? _previousStartHistory(UnloadingPkDetailData? data) {
+    final history = data?.unloadingHistory;
+    if (history == null || history.isEmpty) return null;
+
+    final activeCycle = _activeCycle();
+
+    for (final item in history.reversed) {
+      if ((item.cycle ?? 0) < activeCycle && _hasStartHistoryData(item)) {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
+  List<String>? _photoUrlsFromPhotos(List<UnloadingPkPhoto>? photos) {
+    final urls = (photos ?? [])
+        .map((p) => p.url ?? p.path ?? '')
+        .where((p) => p.isNotEmpty)
+        .toList();
+    return urls.isEmpty ? null : urls;
+  }
+
+  String _normalize(String? value) => (value ?? '').toLowerCase().trim();
+
+    int _effectiveCounter() =>
+      (finishLabCounter ??
+              widget.model.counter ??
+              widget.model.resamplingCounter ??
+              0)
+          .clamp(0, 2);
+
+  String _effectiveLabStatus() => _normalize(finishLabStatus ?? widget.model.labStatus);
+
+    bool get _isResamplingDisabledAtFinish =>
+      _isFinishStage &&
+      _effectiveLabStatus() == 'approved' &&
+        _effectiveCounter() == 2;
+
+  LabPkRecord? _latestLabRecord(List<LabPkRecord>? records) {
+    if (records == null || records.isEmpty) return null;
+
+    final sorted = List<LabPkRecord>.from(records);
+    sorted.sort((a, b) {
+      final counterCompare = (a.counter ?? 0).compareTo(b.counter ?? 0);
+      if (counterCompare != 0) return counterCompare;
+      return (a.testedAt ?? '').compareTo(b.testedAt ?? '');
+    });
+
+    return sorted.last;
+  }
+
+  int _activeCycle() {
+    final registStatus = _normalize(widget.model.registStatus);
+    final counterLabel = _normalize(widget.model.counterStatusLabel);
+    final cycle =
+        widget.model.cycle ??
+        widget.model.counter ??
+        widget.model.resamplingCounter ??
+        0;
+
+    if (registStatus.contains('reunloading_2') ||
+        counterLabel.startsWith('reunloading_2') ||
+        cycle >= 2) {
+      return 2;
+    }
+
+    if (registStatus.contains('reunloading_1') ||
+        counterLabel.startsWith('reunloading_1') ||
+        cycle >= 1) {
+      return 1;
+    }
+
+    return 0;
+  }
+
+  String _cycleStartTitleFor(int cycle) {
+    switch (cycle) {
+      case 1:
+        return 'Start Re-Unloading 1';
+      case 2:
+        return 'Start Re-Unloading 2';
+      default:
+        return 'Start Unloading Awal';
+    }
+  }
+
+  UnloadingPkHistory? _startHistoryByCycle(
+    List<UnloadingPkHistory> history,
+    int cycle,
+  ) {
+    for (final item in history.reversed) {
+      if ((item.cycle ?? 0) == cycle && _hasStartHistoryData(item)) {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
+  List<UnloadingPkHistory> _startHistoriesUntilActiveCycle(
+    UnloadingPkDetailData? data,
+  ) {
+    final history = data?.unloadingHistory;
+    if (history == null || history.isEmpty) return const [];
+
+    final activeCycle = _activeCycle();
+    final result = <UnloadingPkHistory>[];
+
+    for (var cycle = 0; cycle <= activeCycle; cycle++) {
+      final item = _startHistoryByCycle(history, cycle);
+      if (item != null) {
+        result.add(item);
+      }
+    }
+
+    return result;
+  }
+
+  List<UnloadingPkHistory> _startHistoriesBeforeActiveCycle(
+    UnloadingPkDetailData? data,
+  ) {
+    final history = data?.unloadingHistory;
+    if (history == null || history.isEmpty) return const [];
+
+    final activeCycle = _activeCycle();
+    final result = <UnloadingPkHistory>[];
+
+    for (var cycle = 0; cycle < activeCycle; cycle++) {
+      final item = _startHistoryByCycle(history, cycle);
+      if (item != null) {
+        result.add(item);
+      }
+    }
+
+    return result;
+  }
+
+  UnloadingPkHistory? _startHistoryForCycle(UnloadingPkDetailData? data) {
+    final history = data?.unloadingHistory;
+    if (history == null || history.isEmpty) return null;
+
+    return _startHistoryByCycle(history, _activeCycle());
   }
 
   Future<void> _loadMasterData() async {
@@ -115,22 +281,28 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
       );
       final d = res.data;
       if (!mounted || d == null) return;
-      
-      // Extract previous submission data
-      final previousTank = d.previousTankId ?? d.tankId;
-      final previousHole = d.previousHoleId ?? d.holeId;
-      final previousRemarkText = d.remarks ?? "";
-      final previousPhotos = d.photos?.map((p) => p.url ?? "").toList() ?? [];
+
+      final previousHistories = _startHistoriesBeforeActiveCycle(d);
+      final previousHistory = _previousStartHistory(d);
 
       setState(() {
-        previousTankId = previousTank;
-        previousHoleId = previousHole;
-        previousTankCode = d.previousTankCode ?? d.tankCode;
-        previousTankName = d.previousTankName ?? d.tankName;
-        previousHoleCode = d.previousHoleCode ?? d.holeCode;
-        previousHoleName = d.previousHoleName ?? d.holeName;
-        previousRemarks = previousRemarkText;
-        previousPhotoUrls = previousPhotos.isNotEmpty ? previousPhotos : null;
+        startPreviousHistories = previousHistories;
+        previousTankId =
+            previousHistory?.tankId ?? d.previousTankId ?? d.tankId;
+        previousHoleId =
+            previousHistory?.holeId ?? d.previousHoleId ?? d.holeId;
+        previousTankCode =
+            previousHistory?.tankCode ?? d.previousTankCode ?? d.tankCode;
+        previousTankName =
+            previousHistory?.tankName ?? d.previousTankName ?? d.tankName;
+        previousHoleCode =
+            previousHistory?.holeCode ?? d.previousHoleCode ?? d.holeCode;
+        previousHoleName =
+            previousHistory?.holeName ?? d.previousHoleName ?? d.holeName;
+        previousRemarks = previousHistory?.remarks ?? d.remarks ?? "";
+        previousPhotoUrls =
+            _photoUrlsFromPhotos(previousHistory?.photos) ??
+            _photoUrlsFromPhotos(d.photos);
       });
     } catch (_) {
       // Silently fail - previous data is optional
@@ -144,47 +316,48 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
         widget.model.registrationId ?? "",
       );
       final d = res.data;
+      final startHistories = _startHistoriesUntilActiveCycle(d);
+      final cycleStartHistory = _startHistoryForCycle(d);
       if (!mounted) return;
       setState(() {
-        // Current start data
-        startTankId = d?.tankId;
-        startHoleId = d?.holeId;
-        startTankName = d?.tankName;
-        startHoleName = d?.holeName;
-        startRemarks = d?.remarks ?? "";
-        
-        // Previous start data (from previous cycle/reunloading)
-        // With fallback to current if no previous exists
-        previousTankId = d?.previousTankId ?? d?.tankId;
-        previousHoleId = d?.previousHoleId ?? d?.holeId;
-        previousTankCode = d?.previousTankCode ?? d?.tankCode;
-        previousTankName = d?.previousTankName ?? d?.tankName;
-        previousHoleCode = d?.previousHoleCode ?? d?.holeCode;
-        previousHoleName = d?.previousHoleName ?? d?.holeName;
-        previousRemarks = d?.remarks ?? "";
-        
-        // Load photos from previous finish attempt (if any)
-        final photos = d?.photos?.map((p) => p.url ?? "").toList() ?? [];
-        previousPhotoUrls = photos.isNotEmpty ? photos : null;
-        
-        // Also load tank/hole names for display
-        if (d?.tankCode != null || d?.tankName != null) {
+        startTankId = cycleStartHistory?.tankId;
+        startHoleId = cycleStartHistory?.holeId;
+        startTankName = cycleStartHistory?.tankName;
+        startHoleName = cycleStartHistory?.holeName;
+        startRemarks = cycleStartHistory?.remarks ?? "";
+        startPhotoUrls = _photoUrlsFromPhotos(cycleStartHistory?.photos);
+        finishStartHistories = startHistories;
+
+        previousTankId = null;
+        previousHoleId = null;
+        previousTankCode = null;
+        previousTankName = null;
+        previousHoleCode = null;
+        previousHoleName = null;
+        previousRemarks = null;
+        previousPhotoUrls = null;
+
+        if (startTankId != null || startTankName != null) {
           tanks = [
             TankItem(
-              id: d!.tankId ?? 0,
-              tank_code: d.tankCode ?? "",
-              tank_name: d.tankName ?? "",
+              id: startTankId ?? 0,
+              tank_code: cycleStartHistory?.tankCode ?? "",
+              tank_name: startTankName ?? "",
             ),
           ];
+        } else {
+          tanks = [];
         }
-        if (d?.holeCode != null || d?.holeName != null) {
+        if (startHoleId != null || startHoleName != null) {
           holes = [
             HoleItem(
-              id: d!.holeId ?? 0,
-              hole_code: d.holeCode ?? "",
-              hole_name: d.holeName ?? "",
+              id: startHoleId ?? 0,
+              hole_code: cycleStartHistory?.holeCode ?? "",
+              hole_name: startHoleName ?? "",
             ),
           ];
+        } else {
+          holes = [];
         }
       });
     } catch (e) {
@@ -193,6 +366,115 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
         SnackBar(content: Text("Gagal load detail start unloading: $e")),
       );
     }
+  }
+
+  Future<void> _loadFinishLabState() async {
+    try {
+      final res = await api.getLabPkDetail(
+        "Bearer ${widget.token}",
+        widget.model.registrationId ?? "",
+      );
+      final latestRecord = _latestLabRecord(res.data?.labRecords);
+      if (!mounted || latestRecord == null) return;
+
+      setState(() {
+        finishLabStatus = latestRecord.status;
+        finishLabCounter = latestRecord.counter;
+      });
+    } catch (_) {
+      // Keep fallback from unloading model when lab detail is unavailable.
+    }
+  }
+
+  String _historyTankLabel(UnloadingPkHistory item) {
+    final tankCode = (item.tankCode ?? '').trim();
+    final tankName = (item.tankName ?? '').trim();
+
+    if (tankCode.isNotEmpty && tankName.isNotEmpty) {
+      return '$tankCode — $tankName';
+    }
+    if (tankName.isNotEmpty) return tankName;
+    if (tankCode.isNotEmpty) return tankCode;
+    if (item.tankId != null) return 'Tank ID: ${item.tankId}';
+    return '-';
+  }
+
+  String _historyHoleLabel(UnloadingPkHistory item) {
+    final holeCode = (item.holeCode ?? '').trim();
+    final holeName = (item.holeName ?? '').trim();
+
+    if (holeCode.isNotEmpty && holeName.isNotEmpty) {
+      return '$holeCode — $holeName';
+    }
+    if (holeName.isNotEmpty) return holeName;
+    if (holeCode.isNotEmpty) return holeCode;
+    if (item.holeId != null) return 'Hole ID: ${item.holeId}';
+    return '-';
+  }
+
+  Widget _buildFinishStartHistoryCard(UnloadingPkHistory item) {
+    final photoUrls = _photoUrlsFromPhotos(item.photos);
+    final cycle = (item.cycle ?? 0).clamp(0, 2);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade500),
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.grey.shade100,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _cycleStartTitleFor(cycle),
+            style: TextStyle(
+              fontSize: baseFont,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _fieldReadOnly('Tank', _historyTankLabel(item)),
+          const SizedBox(height: 8),
+          _fieldReadOnly('Hole', _historyHoleLabel(item)),
+          const SizedBox(height: 8),
+          _fieldReadOnly('Remarks', item.remarks),
+          if (photoUrls != null && photoUrls.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Foto Start (${photoUrls.length})',
+              style: TextStyle(fontSize: baseFont, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: photoUrls.length,
+                itemBuilder: (_, idx) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      photoUrls[idx],
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 100,
+                        color: Colors.grey.shade300,
+                        child: const Icon(Icons.broken_image),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _getImage(int index) async {
@@ -206,9 +488,9 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
 
     if (!statuses[Permission.camera]!.isGranted) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Akses kamera ditolak")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Akses kamera ditolak")));
       return;
     }
 
@@ -218,41 +500,29 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     final f = File(picked.path);
     setState(() {
       switch (index) {
-        case 1: _image1 = f; break;
-        case 2: _image2 = f; break;
-        case 3: _image3 = f; break;
-        case 4: _image4 = f; break;
+        case 1:
+          _image1 = f;
+          break;
+        case 2:
+          _image2 = f;
+          break;
+        case 3:
+          _image3 = f;
+          break;
+        case 4:
+          _image4 = f;
+          break;
       }
     });
   }
 
   List<String> _collectPhotosBase64() {
-    return [_image1, _image2, _image3, _image4]
-        .where((e) => e != null)
-        .map((f) {
+    return [_image1, _image2, _image3, _image4].where((e) => e != null).map((
+      f,
+    ) {
       final bytes = f!.readAsBytesSync();
       return "data:image/jpeg;base64,${base64Encode(bytes)}";
     }).toList();
-  }
-
-  String _tankLabel(int? id) {
-    if (id == null) return "-";
-    final t = tanks.cast<TankItem?>().firstWhere(
-      (x) => x?.id == id,
-      orElse: () => null,
-    );
-    if (t == null) return id.toString();
-    return "${t.tank_code} — ${t.tank_name}";
-  }
-
-  String _holeLabel(int? id) {
-    if (id == null) return "-";
-    final h = holes.cast<HoleItem?>().firstWhere(
-      (x) => x?.id == id,
-      orElse: () => null,
-    );
-    if (h == null) return id.toString();
-    return "${h.hole_code} — ${h.hole_name}";
   }
 
   Future<void> _showConfirmDialog({
@@ -295,8 +565,16 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
 
   Future<void> _confirmStartApprove() async {
     if (selectedTankId == null || selectedHoleId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Pilih Tank dan Hole dulu")));
+      return;
+    }
+    if (!_hasAtLeastOneNewPhoto) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Pilih Tank dan Hole dulu")),
+        const SnackBar(
+          content: Text("Ambil minimal 1 foto baru sebelum approve unloading"),
+        ),
       );
       return;
     }
@@ -349,9 +627,9 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -360,6 +638,26 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   // ─── FINISH UNLOADING ──────────────────────────────────────────────────────
 
   Future<void> _confirmFinish(String status) async {
+    if (status == 'hold' && _isResamplingDisabledAtFinish) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Resampling tidak tersedia saat lab sudah approve di counter 2.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!_hasAtLeastOneNewPhoto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Ambil minimal 1 foto baru sebelum lanjut unloading"),
+        ),
+      );
+      return;
+    }
+
     if (status == "approved" && _photoCount < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Finish harus input 4 foto")),
@@ -368,9 +666,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     }
     if (status == "hold" && _photoCount < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Resampling minimal 1 foto"),
-        ),
+        const SnackBar(content: Text("Resampling minimal 1 foto")),
       );
       return;
     }
@@ -383,11 +679,9 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
       return;
     }
     if (status == "rejected" && _photoCount < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Reject minimal 1 foto"),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Reject minimal 1 foto")));
       return;
     }
 
@@ -422,18 +716,21 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     };
 
     try {
-      final res = await api.finishUnloadingPk("Bearer ${widget.token}", payload);
+      final res = await api.finishUnloadingPk(
+        "Bearer ${widget.token}",
+        payload,
+      );
       if (!mounted) return;
 
       if (res.success == true) {
         final label = status == "hold"
             ? "RESAMPLING"
             : status == "approved"
-                ? "FINISH"
-                : "REJECTED";
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Unloading PK $label berhasil")),
-        );
+            ? "FINISH"
+            : "REJECTED";
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Unloading PK $label berhasil")));
         Navigator.pop(context, {
           "registration_id": widget.model.registrationId,
           "plate_number": widget.model.plateNumber,
@@ -454,9 +751,9 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -507,11 +804,11 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   }
 
   InputDecoration _dec(String label) => InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        filled: true,
-        fillColor: Colors.white,
-      );
+    labelText: label,
+    border: const OutlineInputBorder(),
+    filled: true,
+    fillColor: Colors.white,
+  );
 
   Widget _photoBox(int index, File? f) {
     final canTap = _isCameraEnabled;
@@ -541,18 +838,17 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     Color c,
     VoidCallback onTap, {
     bool enabled = true,
-  }) =>
-      ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: enabled ? c : Colors.grey,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        ),
-        onPressed: _isSubmitting || !enabled ? null : onTap,
-        child: Text(
-          text,
-          style: const TextStyle(fontSize: 14, color: Colors.white),
-        ),
-      );
+  }) => ElevatedButton(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: enabled ? c : Colors.grey,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    ),
+    onPressed: _isSubmitting || !enabled ? null : onTap,
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 14, color: Colors.white),
+    ),
+  );
 
   // ─── BUILD ─────────────────────────────────────────────────────────────────
 
@@ -586,178 +882,49 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
             ...info.entries.map((e) => _fieldReadOnly(e.key, e.value)),
             const SizedBox(height: 12),
 
-            // ── PREVIOUS DATA (if available) ────────────────────────────────
-            if (previousTankId != null && _isStartStage) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade500),
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.grey.shade100,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Data Submission Sebelumnya',
-                      style: TextStyle(
-                        fontSize: baseFont,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _fieldReadOnly("Tank (Sebelumnya)", 
-                        "$previousTankName (ID: $previousTankId)"),
-                    const SizedBox(height: 8),
-                    _fieldReadOnly("Hole (Sebelumnya)", 
-                        "$previousHoleName (ID: $previousHoleId)"),
-                    const SizedBox(height: 8),
-                    _fieldReadOnly("Remarks (Sebelumnya)", previousRemarks),
-                    if (previousPhotoUrls != null && previousPhotoUrls!.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        'Foto Sebelumnya (${previousPhotoUrls!.length})',
-                        style: TextStyle(fontSize: baseFont, fontWeight: FontWeight.w500),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 100,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: previousPhotoUrls!.length,
-                          itemBuilder: (_, idx) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                previousPhotoUrls![idx],
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: 100,
-                                  color: Colors.grey.shade300,
-                                  child: const Icon(Icons.broken_image),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+            // ── PREVIOUS START DATA (cumulative by cycle) ───────────────────
+            if (_isStartStage && startPreviousHistories.isNotEmpty) ...[
+              Text(
+                'Data Submission Sebelumnya',
+                style: TextStyle(
+                  fontSize: baseFont,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
               ),
+              const SizedBox(height: 10),
+              for (var index = 0; index < startPreviousHistories.length; index++) ...[
+                _buildFinishStartHistoryCard(startPreviousHistories[index]),
+                if (index < startPreviousHistories.length - 1)
+                  const SizedBox(height: 12),
+              ],
               const SizedBox(height: 16),
             ],
 
             // ── TANK & HOLE ─────────────────────────────────────────────────
             if (_isFinishStage) ...[
-              // Show previous tank & hole if available
-              if (previousTankId != null || previousHoleId != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade500),
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.grey.shade100,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Tank & Hole Sebelumnya',
-                        style: TextStyle(
-                          fontSize: baseFont,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      _fieldReadOnly("Tank (Sebelumnya)", 
-                          previousTankName != null 
-                              ? "$previousTankName${previousTankCode != null ? ' (${previousTankCode})' : ''}"
-                              : "-"),
-                      const SizedBox(height: 8),
-                      _fieldReadOnly("Hole (Sebelumnya)", 
-                          previousHoleName != null 
-                              ? "$previousHoleName${previousHoleCode != null ? ' (${previousHoleCode})' : ''}"
-                              : "-"),
-                      const SizedBox(height: 8),
-                      _fieldReadOnly("Remarks (Sebelumnya)", previousRemarks),
-                      if (previousPhotoUrls != null && previousPhotoUrls!.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          'Foto Sebelumnya (${previousPhotoUrls!.length})',
-                          style: TextStyle(
-                            fontSize: baseFont,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          height: 100,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: previousPhotoUrls!.length,
-                            itemBuilder: (_, idx) => Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  previousPhotoUrls![idx],
-                                  width: 100,
-                                  height: 100,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    width: 100,
-                                    color: Colors.grey.shade300,
-                                    child: const Icon(Icons.broken_image),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
+              if (finishStartHistories.isNotEmpty) ...[
+                for (
+                  var index = 0;
+                  index < finishStartHistories.length;
+                  index++
+                ) ...[
+                  _buildFinishStartHistoryCard(finishStartHistories[index]),
+                  if (index < finishStartHistories.length - 1)
+                    const SizedBox(height: 12),
+                ],
               ],
-              
-              // Current tank & hole
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade500),
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.grey.shade100,
+              if (finishStartHistories.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Data start untuk cycle ini belum dibuat.',
+                    style: TextStyle(fontSize: baseFont, color: Colors.black54),
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Tank & Hole (Start Sekarang)',
-                      style: TextStyle(
-                        fontSize: baseFont,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _fieldReadOnly("Tank", _tankLabel(startTankId)),
-                    const SizedBox(height: 8),
-                    _fieldReadOnly("Hole", _holeLabel(startHoleId)),
-                    const SizedBox(height: 8),
-                    _fieldReadOnly("Remarks", startRemarks),
-                  ],
-                ),
-              ),
             ] else ...[
               DropdownButtonFormField<int>(
-                value: selectedTankId,
+                initialValue: selectedTankId,
                 decoration: _dec("Pilih Tank"),
                 items: tanks
                     .map(
@@ -774,7 +941,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
-                value: selectedHoleId,
+                initialValue: selectedHoleId,
                 decoration: _dec("Pilih Hole"),
                 items: holes
                     .map(
@@ -858,12 +1025,9 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
                     "Resampling",
                     Colors.orange,
                     () => _confirmFinish("hold"),
+                    enabled: !_isResamplingDisabledAtFinish,
                   ),
-                  _btn(
-                    "Finish",
-                    Colors.blue,
-                    () => _confirmFinish("approved"),
-                  ),
+                  _btn("Finish", Colors.blue, () => _confirmFinish("approved")),
                   _btn(
                     "Reject",
                     Colors.red,
