@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_vcf/PK/Sample%20PK/sample_qc_pk.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_vcf/api_service.dart';
@@ -17,8 +16,8 @@ class AddPKDataPage extends StatefulWidget {
   final String registrationId;
   final String platKendaraan;
   final String tiketNo;
-  final String vendorCode;
-  final String vendorName;
+  final String? vendorCode;
+  final String? vendorName;
   final String commodityCode;
   final String commodityName;
 
@@ -29,8 +28,8 @@ class AddPKDataPage extends StatefulWidget {
     required this.registrationId,
     required this.platKendaraan,
     required this.tiketNo,
-    required this.vendorCode,
-    required this.vendorName,
+    this.vendorCode,
+    this.vendorName,
     required this.commodityCode,
     required this.commodityName,
   });
@@ -95,9 +94,18 @@ class _AddPKDataPageState extends State<AddPKDataPage> {
         loading = false;
       });
     } catch (e) {
-      setState(() => loading = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Load error: $e")));
+      debugPrint("Load error: $e");
+      setState(() {
+        records = <QcSamplingPkRecord>[];
+        activeCounter = 0;
+        newPhotos = List<File?>.filled(4, null);
+        sectionChecked = [false, false, false];
+        loading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Load error: $e")));
+      }
     }
   }
 
@@ -124,9 +132,9 @@ class _AddPKDataPageState extends State<AddPKDataPage> {
     }
 
     final filledCount = newPhotos.where((f) => f != null).length;
-    if (filledCount < 2) {
+    if (filledCount < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Minimal 2 foto wajib di-upload.")),
+        const SnackBar(content: Text("Minimal 1 foto baru wajib di-upload.")),
       );
       return;
     }
@@ -321,32 +329,6 @@ Future<void> _reloadPhotosForCounter(int counter) async {
                   child: Image.file(img, fit: BoxFit.cover),
                 ),
         ),
-      ),
-    );
-  }
-
-  Widget _newPhotoBox(int index, bool enabled) {
-    final f = newPhotos[index];
-    return GestureDetector(
-      onTap: enabled ? () => pickPhoto(index) : null,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: enabled ? Colors.black45 : Colors.grey.shade400,
-          ),
-          borderRadius: BorderRadius.circular(8),
-          color: enabled ? Colors.white : Colors.grey.shade300,
-        ),
-        child: f == null
-            ? Icon(
-                Icons.camera_alt,
-                size: 28,
-                color: enabled ? Colors.grey[800] : Colors.grey[500],
-              )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(f, fit: BoxFit.cover),
-              ),
       ),
     );
   }
@@ -564,8 +546,8 @@ Future<void> _reloadPhotosForCounter(int counter) async {
         children: [
           _readonlyField("Plat Kendaraan", widget.platKendaraan),
           _readonlyField("Tiket Timbang", widget.tiketNo),
-          _readonlyField("Kode Vendor", widget.vendorCode),
-          _readonlyField("Nama Vendor", widget.vendorName),
+          _readonlyField("Kode Vendor", widget.vendorCode ?? "-"),
+          _readonlyField("Nama Vendor", widget.vendorName ?? "-"),
           _readonlyField("Kode Komoditi", widget.commodityCode),
           _readonlyField("Nama Komoditi", widget.commodityName),
           _section(0),

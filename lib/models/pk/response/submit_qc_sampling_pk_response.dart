@@ -25,8 +25,8 @@ class SubmitQcSamplingPkData {
   final String registration_id;
   final String plate_number;
   final String wb_ticket_no;
-  final String vendor_code;
-  final String vendor_name;
+  final String? vendor_code;
+  final String? vendor_name;
   final num? kernel_dirt;
   final num? oil_content_estimate;
   final int counter;
@@ -42,8 +42,8 @@ class SubmitQcSamplingPkData {
     required this.registration_id,
     required this.plate_number,
     required this.wb_ticket_no,
-    required this.vendor_code,
-    required this.vendor_name,
+    this.vendor_code,
+    this.vendor_name,
     this.kernel_dirt,
     this.oil_content_estimate,
     required this.counter,

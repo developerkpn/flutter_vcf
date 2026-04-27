@@ -6,15 +6,18 @@ import 'package:flutter_vcf/models/pk/response/unloading_pk_response.dart';
 import 'package:flutter_vcf/models/pk/unloading_pk_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'input_unloading_pk.dart';
+import 'unloading_pk.dart';
 
 class AddUnloadingPKPage extends StatefulWidget {
   final String userId;
   final String token;
+  final UnloadingPKStage stage;
 
   const AddUnloadingPKPage({
     super.key,
     required this.userId,
     required this.token,
+    this.stage = UnloadingPKStage.start,
   });
 
   @override
@@ -39,6 +42,47 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
     return prefs.getString("jwt_token") ?? widget.token;
   }
 
+  String _unloadingStatus(UnloadingPkModel item) =>
+      (item.unloadingStatus ?? '').toLowerCase().trim();
+
+  bool _isReadyForStart(UnloadingPkModel item) {
+    final registStatus = (item.registStatus ?? '').toLowerCase();
+
+    // Backend now prepares pending row per active cycle.
+    // Only rows with null/empty unloading_status are truly "belum start".
+    if (_unloadingStatus(item).isNotEmpty) {
+      return false;
+    }
+
+    return registStatus == 'start_unloading' ||
+        registStatus == 'start_reunloading_1' ||
+        registStatus == 'start_reunloading_2' ||
+        registStatus == 'finish_unloading' ||
+        registStatus == 'finish_reunloading_1' ||
+        registStatus == 'finish_reunloading_2' ||
+        registStatus == 'qc_resampling' ||
+        registStatus == 'qc_relab';
+  }
+
+  bool _isReadyForFinish(UnloadingPkModel item) {
+    final registStatus = (item.registStatus ?? '').toLowerCase();
+    final counterLabel = (item.counterStatusLabel ?? '').toLowerCase();
+    final cycle = (item.cycle ?? item.counter ?? item.resamplingCounter ?? 0);
+
+    if (_unloadingStatus(item) != 'approved') {
+      return false;
+    }
+
+    return registStatus == 'start_unloading' ||
+        registStatus == 'start_reunloading_1' ||
+        registStatus == 'start_reunloading_2' ||
+        registStatus == 'qc_resampling' ||
+        registStatus == 'qc_relab' ||
+        counterLabel == 'unloading' ||
+        counterLabel.startsWith('reunloading_') ||
+        cycle > 0;
+  }
+
   void _loadData() async {
     final token = await _getToken();
     final apiService = ApiService(AppConfig.createDio());
@@ -50,9 +94,13 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isFinishStage = widget.stage == UnloadingPKStage.finish;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tambah Unloading PK'),
+        title: Text(
+          isFinishStage ? 'Pilih Finish Unloading PK' : 'Tambah Unloading PK',
+        ),
         backgroundColor: Colors.blue,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
@@ -73,10 +121,9 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
 
           final data = snapshot.data?.data ?? [];
 
-          final readyVehicles = data.where((e) {
-            final registStatus = (e.registStatus ?? "").toLowerCase();
-            return registStatus == "unloading" || registStatus == "qc_reunloading";
-          }).toList();
+          final readyVehicles = data
+              .where(isFinishStage ? _isReadyForFinish : _isReadyForStart)
+              .toList();
 
           final uniquePlates = readyVehicles
               .map((e) => e.plateNumber)
@@ -103,7 +150,7 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Silakan Pilih Plat Kendaraan yang Siap Unloading PK',
+                  'Silakan Pilih Plat Kendaraan',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 12),
@@ -113,7 +160,7 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
                     border: OutlineInputBorder(),
                     labelText: 'Plat Kendaraan',
                   ),
-                  value: selectedPlat,
+                  initialValue: selectedPlat,
                   items: uniquePlates.map((plate) {
                     final item = readyVehicles.firstWhere(
                       (e) => e.plateNumber == plate,
@@ -142,7 +189,7 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
                       ),
                     ),
                     label: const Text(
-                      "Lanjut ke Input Unloading PK",
+                      "Lanjut ke Input",
                       style: TextStyle(color: Colors.white, fontSize: 14),
                     ),
                     onPressed: selectedPlat == null
@@ -158,10 +205,12 @@ class _AddUnloadingPKPageState extends State<AddUnloadingPKPage> {
                                 builder: (_) => InputUnloadingPKPage(
                                   model: kendaraan,
                                   token: widget.token,
+                                  stage: widget.stage,
                                 ),
                               ),
                             );
 
+                            if (!context.mounted) return;
                             if (result != null) {
                               Navigator.pop(context, result);
                             }

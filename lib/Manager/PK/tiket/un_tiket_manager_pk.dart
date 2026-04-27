@@ -391,10 +391,14 @@ class _ManagerUnloadingCheckInputPageState
             "Bearer ${widget.token}",
             registrationId,
           );
-          fallbackPhotoSources = (unloadingRes.data?.photos ?? [])
-              .map((p) => p.url ?? p.path ?? '')
-              .where((s) => s.isNotEmpty)
+          final finishPhotos = unloadingRes.data?.unloading2History
+              ?.expand((item) => item.photos ?? const [])
               .toList();
+          fallbackPhotoSources =
+              (finishPhotos ?? unloadingRes.data?.photos ?? [])
+                  .map<String>((p) => p.url ?? p.path ?? '')
+                  .where((s) => s.isNotEmpty)
+                  .toList();
         } catch (_) {}
       }
 
@@ -669,10 +673,7 @@ class _ManagerUnloadingCheckInputPageState
                             mgrHoleIdCtrl,
                             keyboardType: TextInputType.number,
                           ),
-                          _managerInputField(
-                            "Manager Status",
-                            mgrStatusCtrl,
-                          ),
+                          _managerInputField("Manager Status", mgrStatusCtrl),
                           _managerInputField(
                             "Manager Start Time",
                             mgrStartTimeCtrl,

@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/pk/response/qc_sampling_pk_vehicles_response.dart';
@@ -57,46 +55,6 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
     return prefs.getString('jwt_token') ?? widget.token;
   }
 
-  Future<int> _resolveResamplingCounter({
-    required String token,
-    required QcSamplingPkVehicle vehicle,
-    required bool needsResamplingCreate,
-  }) async {
-    final int fallbackLastCounter = vehicle.counter ?? 0;
-
-    if (!needsResamplingCreate) {
-      return fallbackLastCounter.clamp(1, 2);
-    }
-
-    try {
-      final detail = await api.getQcSamplingPkSample(
-        "Bearer $token",
-        vehicle.registration_id,
-      );
-
-      final records = detail.data?.sampling_records ?? [];
-
-      final pendingRecords =
-          records.where((r) => r.sampled_at == null).toList()
-            ..sort((a, b) => a.counter.compareTo(b.counter));
-
-      if (pendingRecords.isNotEmpty) {
-        return pendingRecords.first.counter.clamp(1, 2);
-      }
-
-      int maxCounter = 0;
-      for (final r in records) {
-        if (r.counter > maxCounter) {
-          maxCounter = r.counter;
-        }
-      }
-
-      return (maxCounter + 1).clamp(1, 2);
-    } catch (_) {
-      return (fallbackLastCounter + 1).clamp(1, 2);
-    }
-  }
-
   Future<void> fetchTickets() async {
     setState(() => isLoading = true);
 
@@ -107,23 +65,39 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
       final List<QcSamplingPkVehicle> vehicles =
           res.data ?? <QcSamplingPkVehicle>[];
 
-      final filtered =
-          vehicles.where((e) => e.has_sampling_data == true).toList();
+      final filtered = vehicles
+          .where((e) => e.has_sampling_data == true || (e.counter ?? 0) > 0)
+          .toList();
 
-      final list = await Future.wait(filtered.map((e) async {
-        final bool isResampling = e.is_resampling == true;
+      final list = filtered.map((e) {
         final String registStatus = (e.regist_status).toLowerCase().trim();
-        final bool needsResamplingCreate =
-            !isResampling && registStatus.startsWith("qc_resampling");
+        final int samplingCounter = (e.counter ?? 0).clamp(0, 2);
+        final String backendLabel = (e.counter_status_label ?? '')
+            .toLowerCase()
+            .trim();
 
-        final int resamplingCounter = await _resolveResamplingCounter(
-          token: token ?? '',
-          vehicle: e,
-          needsResamplingCreate: needsResamplingCreate,
-        );
-
-        final String status = needsResamplingCreate
-            ? (resamplingCounter == 2 ? "resampling_2" : "resampling_1")
+        final String status = registStatus == "qc_lab_hold"
+            ? "qc_lab_hold"
+            : registStatus == "start_reunloading_1"
+            ? "start_reunloading_1"
+            : registStatus == "finish_reunloading_1"
+            ? "finish_reunloading_1"
+            : registStatus == "start_reunloading_2"
+            ? "start_reunloading_2"
+            : registStatus == "finish_reunloading_2"
+            ? "finish_reunloading_2"
+            : registStatus == "qc_resampling"
+            ? (samplingCounter == 2 ? "resampling_2" : "resampling_1")
+            : registStatus == "qc_relab"
+            ? (samplingCounter == 2 ? "relab_2" : "relab_1")
+            : backendLabel.startsWith("resampling_") ||
+                  backendLabel.startsWith("relab_") ||
+                  backendLabel.startsWith("reunloading_")
+            ? backendLabel
+            : samplingCounter == 2
+            ? "resampling_2"
+            : samplingCounter == 1
+            ? "resampling_1"
             : (registStatus == "random_check"
                   ? "PENDING_MANAGER_APPROVAL"
                   : "DONE");
@@ -132,15 +106,15 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
           "registration_id": e.registration_id,
           "tiket_no": e.wb_ticket_no,
           "plat": e.plate_number,
-          "vendor_code": e.vendor_code,
-          "vendor_name": e.vendor_name,
+          "vendor_code": e.vendor_code ?? "",
+          "vendor_name": e.vendor_name ?? "",
           "commodity_code": e.commodity_code,
           "commodity_name": e.commodity_name,
-          "is_resampling": isResampling,
-          "resampling_counter": resamplingCounter,
+          "is_resampling": samplingCounter > 0 || e.is_resampling == true,
+          "resampling_counter": samplingCounter,
           "status": status,
         };
-      }));
+      }).toList();
 
       setState(() {
         tickets = list.cast<Map<String, dynamic>>();
@@ -151,7 +125,9 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
       await prefs.remove(_kCacheKey);
       await saveTicketsCache();
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
+      if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Error fetch: $e")));
@@ -160,52 +136,129 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
   }
 
   bool _isResamplingStatus(String status) {
-    return status == "resampling_1" ||
-        status == "resampling_2" ||
-        status == "RE-SAMPLING";
+    final normalized = status.toLowerCase().trim();
+    return normalized == "resampling_1" ||
+        normalized == "resampling_2" ||
+        normalized == "re-sampling";
+  }
+
+  bool _isRelabStatus(String status) {
+    final normalized = status.toLowerCase().trim();
+    return normalized == "relab_1" || normalized == "relab_2";
+  }
+
+  bool _isReunloadingStatus(String status) {
+    final normalized = status.toLowerCase().trim();
+    return normalized == "reunloading_1" ||
+        normalized == "reunloading_2" ||
+        normalized == "start_reunloading_1" ||
+        normalized == "start_reunloading_2" ||
+        normalized == "finish_reunloading_1" ||
+        normalized == "finish_reunloading_2";
   }
 
   Color _getStatusColor(Map item) {
-    final status = item["status"] as String? ?? "";
+    final status = ((item["status"] as String?) ?? "").toLowerCase().trim();
+    if (status == "qc_lab_hold") {
+      return Colors.orange;
+    }
     if (_isResamplingStatus(status)) {
       return Colors.purple;
     }
-    if (status == "PENDING_MANAGER_APPROVAL") {
+    if (_isRelabStatus(status)) {
+      return Colors.indigo;
+    }
+    if (status == 'start_reunloading_1' || status == 'start_reunloading_2' ||
+        status == 'reunloading_1' || status == 'reunloading_2') {
+      return Colors.brown;
+    }
+    if (_isReunloadingStatus(status)) {
+      return Colors.orange;
+    }
+    if (status == "pending_manager_approval") {
       return Colors.yellow.shade700;
     }
     return Colors.green;
   }
 
   Color _getStatusBg(Map item) {
-    return _getStatusColor(item).withOpacity(0.15);
+    return _getStatusColor(item).withValues(alpha: 0.15);
   }
 
   IconData _getStatusIcon(Map item) {
-    final status = item["status"] as String? ?? "";
+    final status = ((item["status"] as String?) ?? "").toLowerCase().trim();
+    if (status == "qc_lab_hold") {
+      return Icons.pause_circle_outline;
+    }
     if (status == "resampling_2") {
       return Icons.loop;
     }
-    if (status == "resampling_1" || status == "RE-SAMPLING") {
+    if (status == "resampling_1" || status == "re-sampling") {
       return Icons.refresh;
     }
-    if (status == "PENDING_MANAGER_APPROVAL") {
+    if (status == "relab_2") {
+      return Icons.science_outlined;
+    }
+    if (status == "relab_1") {
+      return Icons.biotech_outlined;
+    }
+    if (status == "finish_reunloading_2") {
+      return Icons.check_circle_outline;
+    }
+    if (status == "start_reunloading_2" || status == "reunloading_2") {
+      return Icons.loop;
+    }
+    if (status == "finish_reunloading_1") {
+      return Icons.check_circle_outline;
+    }
+    if (status == "start_reunloading_1" || status == "reunloading_1") {
+      return Icons.refresh;
+    }
+    if (status == "pending_manager_approval") {
       return Icons.error_outline;
     }
     return Icons.check_circle_outline;
   }
 
   String _getStatusLabel(Map item) {
-    final status = item["status"] as String? ?? "";
+    final status = ((item["status"] as String?) ?? "").toLowerCase().trim();
+    if (status == "qc_lab_hold") {
+      return "QC LAB HOLD";
+    }
     if (status == "resampling_2") {
-      return "RE-SAMPLING 2";
+      return "RESAMPLING 2";
     }
-    if (status == "resampling_1" || status == "RE-SAMPLING") {
-      return "RE-SAMPLING 1";
+    if (status == "resampling_1" || status == "re-sampling") {
+      return "RESAMPLING 1";
     }
-    if (status == "PENDING_MANAGER_APPROVAL") {
+    if (status == "relab_2") {
+      return "RE-LAB 2";
+    }
+    if (status == "relab_1") {
+      return "RE-LAB 1";
+    }
+    if (status == "start_reunloading_2") {
+      return "START REUNLOADING 2";
+    }
+    if (status == "finish_reunloading_2") {
+      return "FINISH REUNLOADING 2";
+    }
+    if (status == "start_reunloading_1") {
+      return "START REUNLOADING 1";
+    }
+    if (status == "finish_reunloading_1") {
+      return "FINISH REUNLOADING 1";
+    }
+    if (status == "reunloading_2") {
+      return "START REUNLOADING 2";
+    }
+    if (status == "reunloading_1") {
+      return "START REUNLOADING 1";
+    }
+    if (status == "pending_manager_approval") {
       return "Pending Manager Approval";
     }
-    return status;
+    return status.toUpperCase();
   }
 
   @override
@@ -237,7 +290,9 @@ class _SampleQCPKPageState extends State<SampleQCPKPage> {
                   return InkWell(
                     onTap: () {
                       // Hanya tiket yang statusnya RE-SAMPLING yang boleh dibuka untuk re-sample
-                      if (_isResamplingStatus(item["status"] as String? ?? "")) {
+                      if (_isResamplingStatus(
+                        item["status"] as String? ?? "",
+                      )) {
                         Navigator.push(
                           context,
                           MaterialPageRoute(

@@ -7,9 +7,13 @@ class SubmitUnloadingResponse {
   final bool success;
   final String? message;
 
+  @JsonKey(name: 'unloading_2_id')
+  final String? unloading2Id;
+
   SubmitUnloadingResponse({
     required this.success,
     this.message,
+    this.unloading2Id,
   });
 
   factory SubmitUnloadingResponse.fromJson(Map<String, dynamic> json) =>

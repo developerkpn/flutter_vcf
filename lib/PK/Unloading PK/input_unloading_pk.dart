@@ -7,18 +7,23 @@ import 'package:flutter_vcf/api_service.dart';
 import 'package:flutter_vcf/config.dart';
 import 'package:flutter_vcf/models/master/response/master_hole_response.dart';
 import 'package:flutter_vcf/models/master/response/master_tank_response.dart';
-import 'package:flutter_vcf/models/pk/unloading_pk_model.dart';
+import 'package:flutter_vcf/models/pk/response/lab_pk_detail_response.dart';
 import 'package:flutter_vcf/models/pk/response/unloading_pk_detail_response.dart';
+import 'package:flutter_vcf/models/pk/unloading_pk_model.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'unloading_pk.dart';
 
 class InputUnloadingPKPage extends StatefulWidget {
   final String token;
   final UnloadingPkModel model;
+  final UnloadingPKStage stage;
+
   const InputUnloadingPKPage({
     super.key,
     required this.token,
     required this.model,
+    this.stage = UnloadingPKStage.start,
   });
 
   @override
@@ -27,13 +32,10 @@ class InputUnloadingPKPage extends StatefulWidget {
 
 class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   final TextEditingController remarksCtrl = TextEditingController();
-  final TextEditingController reRemarksCtrl = TextEditingController();
   final double baseFont = 15;
 
   bool _isSubmitting = false;
-  String pageMode = 'normal';
   bool _isCameraEnabled = false;
-  bool _isReloadingExisting = false;
 
   File? _image1, _image2, _image3, _image4;
   final ImagePicker picker = ImagePicker();
@@ -41,34 +43,217 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
   late Dio _dio;
   late ApiService api;
 
+  // Start stage: editable
   List<TankItem> tanks = [];
   List<HoleItem> holes = [];
+  int? selectedTankId;
+  int? selectedHoleId;
 
-  int? initialTankId;
-  int? initialHoleId;
-  String? initialRemarks;
+  // Finish stage: read-only from start detail
+  int? startTankId;
+  int? startHoleId;
+  String? startTankName;
+  String? startHoleName;
+  String? startRemarks;
+  List<String>? startPhotoUrls;
+  List<UnloadingPkHistory> finishStartHistories = [];
+  List<UnloadingPkHistory> startPreviousHistories = [];
 
-  int? reSelectedTankId;
-  int? reSelectedHoleId;
+  // Previous data (for cycle > 1 at start, or for finish previous attempt)
+  int? previousTankId;
+  int? previousHoleId;
+  String? previousTankCode;
+  String? previousTankName;
+  String? previousHoleCode;
+  String? previousHoleName;
+  String? previousRemarks;
+  List<String>? previousPhotoUrls;
+  String? finishLabStatus;
+  int? finishLabCounter;
 
-  List<String> _existingPhotos = [];
+  bool get _isFinishStage => widget.stage == UnloadingPKStage.finish;
+  bool get _isStartStage => widget.stage == UnloadingPKStage.start;
 
-  bool unloadingStarted = false;
-  bool disableHoldButton = false;
+  int get _photoCount =>
+      [_image1, _image2, _image3, _image4].where((e) => e != null).length;
+
+  bool get _hasAtLeastOneNewPhoto => _photoCount > 0;
 
   @override
   void initState() {
     super.initState();
     _dio = AppConfig.createDio(withLogging: !kReleaseMode);
     api = ApiService(_dio);
-    _loadMasterData().whenComplete(() => _loadExistingUnloading());
+    if (_isFinishStage) {
+      _loadStartDetail();
+      _loadFinishLabState();
+    } else {
+      _loadMasterData();
+      // Load previous data for start stage
+      _loadPreviousStartData();
+    }
   }
 
   @override
   void dispose() {
     remarksCtrl.dispose();
-    reRemarksCtrl.dispose();
     super.dispose();
+  }
+
+  bool _hasStartHistoryData(UnloadingPkHistory? item) {
+    if (item == null) return false;
+    if ((item.unloadingId ?? '').isEmpty) return false;
+    if (item.tankId != null || item.holeId != null) return true;
+    if (_normalize(item.status).isNotEmpty) return true;
+    if ((item.startTime ?? '').trim().isNotEmpty) return true;
+    if ((item.endTime ?? '').trim().isNotEmpty) return true;
+    if ((item.remarks ?? '').trim().isNotEmpty) return true;
+    return item.photos?.isNotEmpty ?? false;
+  }
+
+  UnloadingPkHistory? _previousStartHistory(UnloadingPkDetailData? data) {
+    final history = data?.unloadingHistory;
+    if (history == null || history.isEmpty) return null;
+
+    final activeCycle = _activeCycle();
+
+    for (final item in history.reversed) {
+      if ((item.cycle ?? 0) < activeCycle && _hasStartHistoryData(item)) {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
+  List<String>? _photoUrlsFromPhotos(List<UnloadingPkPhoto>? photos) {
+    final urls = (photos ?? [])
+        .map((p) => p.url ?? p.path ?? '')
+        .where((p) => p.isNotEmpty)
+        .toList();
+    return urls.isEmpty ? null : urls;
+  }
+
+  String _normalize(String? value) => (value ?? '').toLowerCase().trim();
+
+    int _effectiveCounter() =>
+      (finishLabCounter ??
+              widget.model.counter ??
+              widget.model.resamplingCounter ??
+              0)
+          .clamp(0, 2);
+
+  String _effectiveLabStatus() => _normalize(finishLabStatus ?? widget.model.labStatus);
+
+    bool get _isResamplingDisabledAtFinish =>
+      _isFinishStage &&
+      _effectiveLabStatus() == 'approved' &&
+        _effectiveCounter() == 2;
+
+  LabPkRecord? _latestLabRecord(List<LabPkRecord>? records) {
+    if (records == null || records.isEmpty) return null;
+
+    final sorted = List<LabPkRecord>.from(records);
+    sorted.sort((a, b) {
+      final counterCompare = (a.counter ?? 0).compareTo(b.counter ?? 0);
+      if (counterCompare != 0) return counterCompare;
+      return (a.testedAt ?? '').compareTo(b.testedAt ?? '');
+    });
+
+    return sorted.last;
+  }
+
+  int _activeCycle() {
+    final registStatus = _normalize(widget.model.registStatus);
+    final counterLabel = _normalize(widget.model.counterStatusLabel);
+    final cycle =
+        widget.model.cycle ??
+        widget.model.counter ??
+        widget.model.resamplingCounter ??
+        0;
+
+    if (registStatus.contains('reunloading_2') ||
+        counterLabel.startsWith('reunloading_2') ||
+        cycle >= 2) {
+      return 2;
+    }
+
+    if (registStatus.contains('reunloading_1') ||
+        counterLabel.startsWith('reunloading_1') ||
+        cycle >= 1) {
+      return 1;
+    }
+
+    return 0;
+  }
+
+  String _cycleStartTitleFor(int cycle) {
+    switch (cycle) {
+      case 1:
+        return 'Start Re-Unloading 1';
+      case 2:
+        return 'Start Re-Unloading 2';
+      default:
+        return 'Start Unloading Awal';
+    }
+  }
+
+  UnloadingPkHistory? _startHistoryByCycle(
+    List<UnloadingPkHistory> history,
+    int cycle,
+  ) {
+    for (final item in history.reversed) {
+      if ((item.cycle ?? 0) == cycle && _hasStartHistoryData(item)) {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
+  List<UnloadingPkHistory> _startHistoriesUntilActiveCycle(
+    UnloadingPkDetailData? data,
+  ) {
+    final history = data?.unloadingHistory;
+    if (history == null || history.isEmpty) return const [];
+
+    final activeCycle = _activeCycle();
+    final result = <UnloadingPkHistory>[];
+
+    for (var cycle = 0; cycle <= activeCycle; cycle++) {
+      final item = _startHistoryByCycle(history, cycle);
+      if (item != null) {
+        result.add(item);
+      }
+    }
+
+    return result;
+  }
+
+  List<UnloadingPkHistory> _startHistoriesBeforeActiveCycle(
+    UnloadingPkDetailData? data,
+  ) {
+    final history = data?.unloadingHistory;
+    if (history == null || history.isEmpty) return const [];
+
+    final activeCycle = _activeCycle();
+    final result = <UnloadingPkHistory>[];
+
+    for (var cycle = 0; cycle < activeCycle; cycle++) {
+      final item = _startHistoryByCycle(history, cycle);
+      if (item != null) {
+        result.add(item);
+      }
+    }
+
+    return result;
+  }
+
+  UnloadingPkHistory? _startHistoryForCycle(UnloadingPkDetailData? data) {
+    final history = data?.unloadingHistory;
+    if (history == null || history.isEmpty) return null;
+
+    return _startHistoryByCycle(history, _activeCycle());
   }
 
   Future<void> _loadMasterData() async {
@@ -88,143 +273,212 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     }
   }
 
-  Future<void> _loadExistingUnloading() async {
+  Future<void> _loadPreviousStartData() async {
     try {
       final res = await api.getUnloadingPkDetail(
         "Bearer ${widget.token}",
         widget.model.registrationId ?? "",
       );
       final d = res.data;
+      if (!mounted || d == null) return;
 
-      final samplingCount = await _countSamplingData();
-
-      if (!mounted) return;
-
-      if (d == null) {
-        setState(() {
-          pageMode = 'normal';
-          unloadingStarted = false;
-          reSelectedTankId = null;
-          reSelectedHoleId = null;
-          _existingPhotos = [];
-          initialTankId = null;
-          initialHoleId = null;
-          initialRemarks = null;
-          remarksCtrl.text = "";
-          reRemarksCtrl.text = "";
-          _isCameraEnabled = false;
-        });
-        return;
-      }
-
-      final regStatus = (d.registStatus ?? "").toLowerCase().trim();
-      final unloadingStatus = (d.unloadingStatus ?? "").toLowerCase().trim();
-      final unloadingExists =
-          d.tankId != null ||
-          d.holeId != null ||
-          (d.remarks?.isNotEmpty ?? false) ||
-          (d.photos != null && d.photos!.isNotEmpty);
+      final previousHistories = _startHistoriesBeforeActiveCycle(d);
+      final previousHistory = _previousStartHistory(d);
 
       setState(() {
-        reSelectedTankId = null;
-        reSelectedHoleId = null;
-        reRemarksCtrl.text = "";
-        _existingPhotos = [];
-        initialTankId = null;
-        initialHoleId = null;
-        initialRemarks = null;
-        remarksCtrl.text = "";
-        unloadingStarted = unloadingExists;
-        pageMode = 'normal';
-        _isCameraEnabled = false;
+        startPreviousHistories = previousHistories;
+        previousTankId =
+            previousHistory?.tankId ?? d.previousTankId ?? d.tankId;
+        previousHoleId =
+            previousHistory?.holeId ?? d.previousHoleId ?? d.holeId;
+        previousTankCode =
+            previousHistory?.tankCode ?? d.previousTankCode ?? d.tankCode;
+        previousTankName =
+            previousHistory?.tankName ?? d.previousTankName ?? d.tankName;
+        previousHoleCode =
+            previousHistory?.holeCode ?? d.previousHoleCode ?? d.holeCode;
+        previousHoleName =
+            previousHistory?.holeName ?? d.previousHoleName ?? d.holeName;
+        previousRemarks = previousHistory?.remarks ?? d.remarks ?? "";
+        previousPhotoUrls =
+            _photoUrlsFromPhotos(previousHistory?.photos) ??
+            _photoUrlsFromPhotos(d.photos);
+      });
+    } catch (_) {
+      // Silently fail - previous data is optional
+    }
+  }
 
-        if (unloadingExists) {
-          initialTankId = d.tankId;
-          initialHoleId = d.holeId;
-          initialRemarks = d.remarks ?? "";
-          remarksCtrl.text = d.remarks ?? "";
-          final allPhotos = (d.photos ?? [])
-              .map((p) => p.url ?? "")
-              .where((u) => u.isNotEmpty)
-              .toList();
-          _existingPhotos = allPhotos.length > 4
-              ? allPhotos.sublist(allPhotos.length - 4)
-              : allPhotos;
-        }
+  Future<void> _loadStartDetail() async {
+    try {
+      final res = await api.getUnloadingPkDetail(
+        "Bearer ${widget.token}",
+        widget.model.registrationId ?? "",
+      );
+      final d = res.data;
+      final startHistories = _startHistoriesUntilActiveCycle(d);
+      final cycleStartHistory = _startHistoryForCycle(d);
+      if (!mounted) return;
+      setState(() {
+        startTankId = cycleStartHistory?.tankId;
+        startHoleId = cycleStartHistory?.holeId;
+        startTankName = cycleStartHistory?.tankName;
+        startHoleName = cycleStartHistory?.holeName;
+        startRemarks = cycleStartHistory?.remarks ?? "";
+        startPhotoUrls = _photoUrlsFromPhotos(cycleStartHistory?.photos);
+        finishStartHistories = startHistories;
 
-        if (unloadingStatus == "hold" && regStatus == "qc_resampling") {
-          pageMode = 'hold_resampling';
-          disableHoldButton = true;
-        } else if (unloadingStatus == "hold" &&
-            (regStatus == "unloading" || regStatus == "qc_reunloading")) {
-          pageMode = 'hold_unloading';
-          disableHoldButton = samplingCount > 2;
+        previousTankId = null;
+        previousHoleId = null;
+        previousTankCode = null;
+        previousTankName = null;
+        previousHoleCode = null;
+        previousHoleName = null;
+        previousRemarks = null;
+        previousPhotoUrls = null;
+
+        if (startTankId != null || startTankName != null) {
+          tanks = [
+            TankItem(
+              id: startTankId ?? 0,
+              tank_code: cycleStartHistory?.tankCode ?? "",
+              tank_name: startTankName ?? "",
+            ),
+          ];
         } else {
-          pageMode = 'normal';
-         disableHoldButton = samplingCount > 2;
+          tanks = [];
+        }
+        if (startHoleId != null || startHoleName != null) {
+          holes = [
+            HoleItem(
+              id: startHoleId ?? 0,
+              hole_code: cycleStartHistory?.holeCode ?? "",
+              hole_name: startHoleName ?? "",
+            ),
+          ];
+        } else {
+          holes = [];
         }
       });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error load detail unloading: $e")),
+        SnackBar(content: Text("Gagal load detail start unloading: $e")),
       );
     }
   }
 
-  Future<int> _countSamplingData() async {
+  Future<void> _loadFinishLabState() async {
     try {
-      final registrationId = widget.model.registrationId ?? "";
-      if (registrationId.isEmpty) return 0;
-
-      final res = await _dio.get(
-        "/qc/sampling/pk/$registrationId",
-        options: Options(
-          headers: {"Authorization": "Bearer ${widget.token}"},
-        ),
+      final res = await api.getLabPkDetail(
+        "Bearer ${widget.token}",
+        widget.model.registrationId ?? "",
       );
+      final latestRecord = _latestLabRecord(res.data?.labRecords);
+      if (!mounted || latestRecord == null) return;
 
-      final body = res.data;
-      if (body is! Map<String, dynamic>) return 0;
-
-      final data = body["data"];
-      if (data is! Map<String, dynamic>) return 0;
-
-      final records = data["sampling_records"];
-      if (records is List) return records.length;
-
-      final samplingCount = data["sampling_count"];
-      if (samplingCount is num) return samplingCount.toInt();
-      if (samplingCount is String) return int.tryParse(samplingCount) ?? 0;
-
-      return 0;
-    } catch (e) {
-      debugPrint("Error Count Sampling Data: $e");
-      return 0;
+      setState(() {
+        finishLabStatus = latestRecord.status;
+        finishLabCounter = latestRecord.counter;
+      });
+    } catch (_) {
+      // Keep fallback from unloading model when lab detail is unavailable.
     }
   }
 
-  String _tankLabel(int? id) {
-    if (id == null) return "-";
-    final t = tanks.firstWhere(
-      (x) => x.id == id,
-      orElse: () => TankItem(id: id, tank_code: "T$id", tank_name: "Tank $id"),
-    );
-    return "${t.tank_code} — ${t.tank_name}";
+  String _historyTankLabel(UnloadingPkHistory item) {
+    final tankCode = (item.tankCode ?? '').trim();
+    final tankName = (item.tankName ?? '').trim();
+
+    if (tankCode.isNotEmpty && tankName.isNotEmpty) {
+      return '$tankCode — $tankName';
+    }
+    if (tankName.isNotEmpty) return tankName;
+    if (tankCode.isNotEmpty) return tankCode;
+    if (item.tankId != null) return 'Tank ID: ${item.tankId}';
+    return '-';
   }
 
-  String _holeLabel(int? id) {
-    if (id == null) return "-";
-    final h = holes.firstWhere(
-      (x) => x.id == id,
-      orElse: () => HoleItem(id: id, hole_code: "H$id", hole_name: "Hole $id"),
+  String _historyHoleLabel(UnloadingPkHistory item) {
+    final holeCode = (item.holeCode ?? '').trim();
+    final holeName = (item.holeName ?? '').trim();
+
+    if (holeCode.isNotEmpty && holeName.isNotEmpty) {
+      return '$holeCode — $holeName';
+    }
+    if (holeName.isNotEmpty) return holeName;
+    if (holeCode.isNotEmpty) return holeCode;
+    if (item.holeId != null) return 'Hole ID: ${item.holeId}';
+    return '-';
+  }
+
+  Widget _buildFinishStartHistoryCard(UnloadingPkHistory item) {
+    final photoUrls = _photoUrlsFromPhotos(item.photos);
+    final cycle = (item.cycle ?? 0).clamp(0, 2);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade500),
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.grey.shade100,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _cycleStartTitleFor(cycle),
+            style: TextStyle(
+              fontSize: baseFont,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _fieldReadOnly('Tank', _historyTankLabel(item)),
+          const SizedBox(height: 8),
+          _fieldReadOnly('Hole', _historyHoleLabel(item)),
+          const SizedBox(height: 8),
+          _fieldReadOnly('Remarks', item.remarks),
+          if (photoUrls != null && photoUrls.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Foto Start (${photoUrls.length})',
+              style: TextStyle(fontSize: baseFont, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: photoUrls.length,
+                itemBuilder: (_, idx) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      photoUrls[idx],
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 100,
+                        color: Colors.grey.shade300,
+                        child: const Icon(Icons.broken_image),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
-    return "${h.hole_code} — ${h.hole_name}";
   }
 
   Future<void> _getImage(int index) async {
     if (!_isCameraEnabled) return;
-    if (!(pageMode == 'hold_unloading' || pageMode == 'normal')) return;
 
     final statuses = await [
       Permission.camera,
@@ -233,6 +487,7 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     ].request();
 
     if (!statuses[Permission.camera]!.isGranted) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("Akses kamera ditolak")));
@@ -261,67 +516,13 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     });
   }
 
-  List<String> _collectPhotosBase64({int max = 4}) {
-    final imgs = [
-      _image1,
-      _image2,
-      _image3,
-      _image4,
-    ].where((e) => e != null).toList();
-
-    final picked = imgs.take(max).map((f) {
+  List<String> _collectPhotosBase64() {
+    return [_image1, _image2, _image3, _image4].where((e) => e != null).map((
+      f,
+    ) {
       final bytes = f!.readAsBytesSync();
       return "data:image/jpeg;base64,${base64Encode(bytes)}";
     }).toList();
-
-    return picked;
-  }
-
-  Future<bool> _startUnloading() async {
-    if (pageMode == 'hold_resampling') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Sedang menunggu resampling. Tidak dapat mengubah data.",
-          ),
-        ),
-      );
-      return false;
-    }
-
-    int? chosenTank;
-    int? chosenHole;
-
-    if (pageMode == 'normal' || pageMode == 'hold_unloading') {
-      chosenTank = reSelectedTankId;
-      chosenHole = reSelectedHoleId;
-    } else {
-      chosenTank = initialTankId;
-      chosenHole = initialHoleId;
-    }
-
-    if (chosenTank == null || chosenHole == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Pilih Tank dan Hole dulu")));
-      return false;
-    }
-
-    final imgs = [
-      _image1,
-      _image2,
-      _image3,
-      _image4,
-    ].where((e) => e != null).toList();
-
-    if (imgs.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Ambil minimal 1 foto dulu")),
-      );
-      return false;
-    }
-
-    return true;
   }
 
   Future<void> _showConfirmDialog({
@@ -360,124 +561,72 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     );
   }
 
-  Future<void> _reloadExistingPhotos() async {
-    if (_isReloadingExisting) return;
-    setState(() => _isReloadingExisting = true);
-    try {
-      await _loadExistingUnloading();
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gambar berhasil dimuat ulang')),
-        );
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat ulang gambar: $e')),
-        );
-    } finally {
-      if (mounted) setState(() => _isReloadingExisting = false);
-    }
-  }
+  // ─── START UNLOADING ───────────────────────────────────────────────────────
 
-  Future<void> _confirmAndSubmit(String status) async {
-    if (status == "hold" && disableHoldButton) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Resampling sudah maksimal")),
-      );
+  Future<void> _confirmStartApprove() async {
+    if (selectedTankId == null || selectedHoleId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Pilih Tank dan Hole dulu")));
       return;
     }
-
-    if (!await _startUnloading()) return;
-
-    await _showConfirmDialog(
-      title: "Konfirmasi Simpan",
-      message: "Apakah anda yakin menyimpan data Unloading PK?",
-      onConfirm: () => _submit(status),
-    );
-  }
-
-  Future<void> _confirmAndFinish() async {
-    if (!await _startUnloading()) return;
-    await _showConfirmDialog(
-      title: "Konfirmasi Selesai",
-      message: "Apakah anda yakin menyelesaikan unloading PK?",
-      onConfirm: () => _submit("approved"),
-    );
-  }
-
-  Future<void> _submit(String status) async {
-    if (_isSubmitting) return;
-    if (pageMode == 'hold_resampling') {
+    if (!_hasAtLeastOneNewPhoto) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Sedang menunggu resampling. Tidak dapat submit."),
+          content: Text("Ambil minimal 1 foto baru sebelum approve unloading"),
         ),
       );
       return;
     }
+    await _showConfirmDialog(
+      title: "Konfirmasi Start Unloading",
+      message: "Apakah anda yakin memulai unloading PK?",
+      onConfirm: _submitStart,
+    );
+  }
 
+  Future<void> _submitStart() async {
+    if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
 
+    final photos = _collectPhotosBase64();
+
+    final payload = {
+      "registration_id": widget.model.registrationId,
+      "tank_id": selectedTankId,
+      "hole_id": selectedHoleId,
+      "remarks": remarksCtrl.text.trim(),
+      if (photos.isNotEmpty) "photos": photos,
+    };
+
     try {
-      final photos = _collectPhotosBase64(max: 4);
-
-      int? payloadTankId;
-      int? payloadHoleId;
-      String payloadRemarks = "";
-
-      if (pageMode == 'hold_unloading' || pageMode == 'normal') {
-        payloadTankId = reSelectedTankId;
-        payloadHoleId = reSelectedHoleId;
-        payloadRemarks = reRemarksCtrl.text.trim();
-      } else {
-        payloadTankId = reSelectedTankId ?? initialTankId;
-        payloadHoleId = reSelectedHoleId ?? initialHoleId;
-        payloadRemarks = reRemarksCtrl.text.trim().isNotEmpty
-            ? reRemarksCtrl.text.trim()
-            : remarksCtrl.text.trim();
-      }
-
-      final payload = {
-        "registration_id": widget.model.registrationId,
-        "status": status,
-        "tank_id": payloadTankId,
-        "hole_id": payloadHoleId,
-        "remarks": payloadRemarks,
-        if (photos.isNotEmpty) "photos": photos,
-      };
-
-      final res = await api.submitUnloadingPk(
-        "Bearer ${widget.token}",
-        payload,
-      );
-
+      final res = await api.startUnloadingPk("Bearer ${widget.token}", payload);
       if (!mounted) return;
 
       if (res.success == true) {
-        final statusLabel = status == "hold" ? "RESAMPLING" : status.toUpperCase();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Unloading PK $statusLabel berhasil"),
-          ),
+          const SnackBar(content: Text("Start Unloading PK berhasil")),
         );
         Navigator.pop(context, {
           "registration_id": widget.model.registrationId,
           "plate_number": widget.model.plateNumber,
           "wb_ticket_no": widget.model.wbTicketNo,
-          "status": status,
+          "status": "start",
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res.message ?? "Gagal submit unloading PK")),
+          SnackBar(content: Text(res.message ?? "Gagal start unloading PK")),
         );
       }
     } on DioException catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Error: ${e.response?.data['message'] ?? e.message}"),
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -486,62 +635,183 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     }
   }
 
-  Widget _initialPhotoThumb(String url) {
-    return AspectRatio(
-      aspectRatio: 3 / 4,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          color: Colors.grey.shade300,
-          border: Border.all(color: Colors.black26),
-        ),
-        child: url.isEmpty
-            ? const Icon(Icons.image_not_supported)
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  color: Colors.white,
-                  alignment: Alignment.center,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.broken_image, size: 20),
-                  ),
-                ),
-              ),
-      ),
-    );
-  }
+  // ─── FINISH UNLOADING ──────────────────────────────────────────────────────
 
-  Future<void> _showPhotoPreviewDialog(String url) async {
-    final mq = MediaQuery.of(context).size;
-    await showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        insetPadding: const EdgeInsets.all(16),
-        child: SizedBox(
-          width: mq.width * 0.9,
-          height: mq.height * 0.75,
-          child: InteractiveViewer(
-            minScale: 0.8,
-            maxScale: 5,
-            child: Image.network(
-              url,
-              fit: BoxFit.contain,
-              errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
-            ),
+  Future<void> _confirmFinish(String status) async {
+    if (status == 'hold' && _isResamplingDisabledAtFinish) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Resampling tidak tersedia saat lab sudah approve di counter 2.',
           ),
         ),
+      );
+      return;
+    }
+
+    if (!_hasAtLeastOneNewPhoto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Ambil minimal 1 foto baru sebelum lanjut unloading"),
+        ),
+      );
+      return;
+    }
+
+    if (status == "approved" && _photoCount < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Finish harus input 4 foto")),
+      );
+      return;
+    }
+    if (status == "hold" && _photoCount < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Resampling minimal 1 foto")),
+      );
+      return;
+    }
+    if (status == "hold" && _photoCount >= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Resampling hanya jika foto kurang dari 4"),
+        ),
+      );
+      return;
+    }
+    if (status == "rejected" && _photoCount < 1) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Reject minimal 1 foto")));
+      return;
+    }
+
+    final titles = {
+      "approved": "Konfirmasi Finish Unloading",
+      "hold": "Konfirmasi Resampling",
+      "rejected": "Konfirmasi Reject",
+    };
+    final messages = {
+      "approved": "Apakah anda yakin menyelesaikan finish unloading PK?",
+      "hold": "Apakah anda yakin melakukan resampling?",
+      "rejected": "Apakah anda yakin reject unloading PK ini?",
+    };
+
+    await _showConfirmDialog(
+      title: titles[status]!,
+      message: messages[status]!,
+      onConfirm: () => _submitFinish(status),
+    );
+  }
+
+  Future<void> _submitFinish(String status) async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
+    final photos = _collectPhotosBase64();
+
+    final payload = {
+      "registration_id": widget.model.registrationId,
+      "status": status,
+      if (photos.isNotEmpty) "photos": photos,
+    };
+
+    try {
+      final res = await api.finishUnloadingPk(
+        "Bearer ${widget.token}",
+        payload,
+      );
+      if (!mounted) return;
+
+      if (res.success == true) {
+        final label = status == "hold"
+            ? "RESAMPLING"
+            : status == "approved"
+            ? "FINISH"
+            : "REJECTED";
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Unloading PK $label berhasil")));
+        Navigator.pop(context, {
+          "registration_id": widget.model.registrationId,
+          "plate_number": widget.model.plateNumber,
+          "wb_ticket_no": widget.model.wbTicketNo,
+          "status": status,
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res.message ?? "Gagal finish unloading PK")),
+        );
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: ${e.response?.data['message'] ?? e.message}"),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  // ─── UI HELPERS ────────────────────────────────────────────────────────────
+
+  Widget _fieldReadOnly(String label, String? value) {
+    if (label == "Plat Kendaraan") {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(fontSize: baseFont)),
+            const SizedBox(height: 6),
+            Text(
+              value ?? "",
+              style: TextStyle(
+                fontSize: baseFont + 1,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: baseFont)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black26),
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(value ?? "-", style: TextStyle(fontSize: baseFont)),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _photoBox(int index, File? f) {
-    final bool canTap =
-        _isCameraEnabled &&
-        (pageMode == 'hold_unloading' || pageMode == 'normal');
+  InputDecoration _dec(String label) => InputDecoration(
+    labelText: label,
+    border: const OutlineInputBorder(),
+    filled: true,
+    fillColor: Colors.white,
+  );
 
+  Widget _photoBox(int index, File? f) {
+    final canTap = _isCameraEnabled;
     return GestureDetector(
       onTap: canTap ? () => _getImage(index) : null,
       child: AspectRatio(
@@ -563,42 +833,24 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
     );
   }
 
-  Widget _fieldReadOnly(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(fontSize: baseFont)),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.black26),
-            ),
-            child: Text(value ?? "-", style: TextStyle(fontSize: baseFont)),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _btn(
+    String text,
+    Color c,
+    VoidCallback onTap, {
+    bool enabled = true,
+  }) => ElevatedButton(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: enabled ? c : Colors.grey,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    ),
+    onPressed: _isSubmitting || !enabled ? null : onTap,
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 14, color: Colors.white),
+    ),
+  );
 
-  Widget _btn(String text, Color c, VoidCallback onTap, {bool enabled = true}) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: enabled ? c : Colors.grey,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      onPressed: _isSubmitting || !enabled ? null : onTap,
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 14, color: Colors.white),
-      ),
-    );
-  }
+  // ─── BUILD ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -616,7 +868,9 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
       appBar: AppBar(
         backgroundColor: Colors.blue,
         title: Text(
-          "Input Unloading PK",
+          _isFinishStage
+              ? "Input Finish Unloading PK"
+              : "Input Start Unloading PK",
           style: TextStyle(fontSize: baseFont + 4, color: Colors.black),
         ),
       ),
@@ -625,197 +879,163 @@ class _InputUnloadingPKPageState extends State<InputUnloadingPKPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            ...info.entries.map((e) => _fieldReadOnly(e.key, e.value)).toList(),
+            ...info.entries.map((e) => _fieldReadOnly(e.key, e.value)),
             const SizedBox(height: 12),
 
-            if (unloadingStarted) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "UNLOADING SEBELUMNYA",
-                    style: TextStyle(
-                      fontSize: baseFont + 1,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  _isReloadingExisting
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : IconButton(
-                          tooltip: 'Reload existing photos',
-                          icon: const Icon(Icons.refresh, size: 20),
-                          onPressed: () async => await _reloadExistingPhotos(),
-                        ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              _fieldReadOnly("Pilih Tank", _tankLabel(initialTankId)),
-              const SizedBox(height: 8),
-              _fieldReadOnly("Pilih Hole", _holeLabel(initialHoleId)),
-              const SizedBox(height: 8),
-              _fieldReadOnly("Remarks", initialRemarks),
-              const SizedBox(height: 12),
-              if (_existingPhotos.isNotEmpty) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black26),
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.white,
-                  ),
-                  child: Row(
-                    children: List.generate(4, (i) {
-                      final hasPhoto = i < _existingPhotos.length;
-                      final url = hasPhoto ? _existingPhotos[i] : '';
-
-                      return Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(right: i < 3 ? 8 : 0),
-                          child: hasPhoto
-                              ? GestureDetector(
-                                  onTap: () => _showPhotoPreviewDialog(url),
-                                  child: _initialPhotoThumb(url),
-                                )
-                              : _initialPhotoThumb(url),
-                        ),
-                      );
-                    }),
-                  ),
+            // ── PREVIOUS START DATA (cumulative by cycle) ───────────────────
+            if (_isStartStage && startPreviousHistories.isNotEmpty) ...[
+              Text(
+                'Data Submission Sebelumnya',
+                style: TextStyle(
+                  fontSize: baseFont,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
-                const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 10),
+              for (var index = 0; index < startPreviousHistories.length; index++) ...[
+                _buildFinishStartHistoryCard(startPreviousHistories[index]),
+                if (index < startPreviousHistories.length - 1)
+                  const SizedBox(height: 12),
               ],
+              const SizedBox(height: 16),
             ],
 
-            if (pageMode == 'hold_unloading' || pageMode == 'normal') ...[
-              Text(
-                "INPUT UNLOADING",
-                style: TextStyle(
-                  fontSize: baseFont + 1,
-                  fontWeight: FontWeight.bold,
+            // ── TANK & HOLE ─────────────────────────────────────────────────
+            if (_isFinishStage) ...[
+              if (finishStartHistories.isNotEmpty) ...[
+                for (
+                  var index = 0;
+                  index < finishStartHistories.length;
+                  index++
+                ) ...[
+                  _buildFinishStartHistoryCard(finishStartHistories[index]),
+                  if (index < finishStartHistories.length - 1)
+                    const SizedBox(height: 12),
+                ],
+              ],
+              if (finishStartHistories.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Data start untuk cycle ini belum dibuat.',
+                    style: TextStyle(fontSize: baseFont, color: Colors.black54),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
+            ] else ...[
               DropdownButtonFormField<int>(
-                value: reSelectedTankId,
-                decoration: const InputDecoration(
-                  labelText: "Pilih Tank",
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
+                initialValue: selectedTankId,
+                decoration: _dec("Pilih Tank"),
                 items: tanks
                     .map(
                       (t) => DropdownMenuItem(
                         value: t.id,
-                        child: Text("${t.tank_code} — ${t.tank_name}"),
+                        child: Text(
+                          "${t.tank_code} — ${t.tank_name}",
+                          style: TextStyle(fontSize: baseFont),
+                        ),
                       ),
                     )
                     .toList(),
-                onChanged: (v) => setState(() => reSelectedTankId = v),
+                onChanged: (v) => setState(() => selectedTankId = v),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
-                value: reSelectedHoleId,
-                decoration: const InputDecoration(
-                  labelText: "Pilih Hole",
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
+                initialValue: selectedHoleId,
+                decoration: _dec("Pilih Hole"),
                 items: holes
                     .map(
                       (h) => DropdownMenuItem(
                         value: h.id,
-                        child: Text("${h.hole_code} — ${h.hole_name}"),
+                        child: Text(
+                          "${h.hole_code} — ${h.hole_name}",
+                          style: TextStyle(fontSize: baseFont),
+                        ),
                       ),
                     )
                     .toList(),
-                onChanged: (v) => setState(() => reSelectedHoleId = v),
+                onChanged: (v) => setState(() => selectedHoleId = v),
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: reRemarksCtrl,
+                controller: remarksCtrl,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: "Remarks (Re-Unloading)",
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
+                decoration: _dec("Remarks"),
                 style: TextStyle(fontSize: baseFont),
               ),
-              const SizedBox(height: 12),
-              CheckboxListTile(
-                value: _isCameraEnabled,
-                title: Text(
-                  "Ambil Foto (Camera)",
-                  style: TextStyle(
-                    fontSize: baseFont + 1,
-                    fontWeight: FontWeight.w500,
-                  ),
+            ],
+
+            const SizedBox(height: 12),
+
+            // ── FOTO ────────────────────────────────────────────────────────
+            CheckboxListTile(
+              value: _isCameraEnabled,
+              title: Text(
+                "Ambil Foto (Camera)",
+                style: TextStyle(
+                  fontSize: baseFont + 1,
+                  fontWeight: FontWeight.w500,
                 ),
-                onChanged: (v) {
-                  setState(() => _isCameraEnabled = v ?? false);
-                  if (v == false) {
-                    setState(() {
-                      _image1 = _image2 = _image3 = _image4 = null;
-                    });
+              ),
+              onChanged: (v) {
+                setState(() {
+                  _isCameraEnabled = v ?? false;
+                  if (!_isCameraEnabled) {
+                    _image1 = _image2 = _image3 = _image4 = null;
                   }
-                },
+                });
+              },
+            ),
+            Container(
+              padding: const EdgeInsets.all(12),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.black26),
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
               ),
-              Container(
-                padding: const EdgeInsets.all(12),
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.black26),
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.white,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(child: _photoBox(1, _image1)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _photoBox(2, _image2)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _photoBox(3, _image3)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _photoBox(4, _image4)),
-                  ],
-                ),
+              child: Row(
+                children: [
+                  Expanded(child: _photoBox(1, _image1)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _photoBox(2, _image2)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _photoBox(3, _image3)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _photoBox(4, _image4)),
+                ],
               ),
-              const SizedBox(height: 20),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── BUTTONS ─────────────────────────────────────────────────────
+            if (!_isFinishStage)
+              Center(
+                child: SizedBox(
+                  width: 160,
+                  child: _btn("Approve", Colors.blue, _confirmStartApprove),
+                ),
+              )
+            else
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _btn(
                     "Resampling",
                     Colors.orange,
-                    () => _confirmAndSubmit("hold"),
-                    enabled: !disableHoldButton,
+                    () => _confirmFinish("hold"),
+                    enabled: !_isResamplingDisabledAtFinish,
                   ),
-                  _btn("Finish", Colors.blue, _confirmAndFinish, enabled: true),
+                  _btn("Finish", Colors.blue, () => _confirmFinish("approved")),
                   _btn(
                     "Reject",
                     Colors.red,
-                    () => _confirmAndSubmit("rejected"),
+                    () => _confirmFinish("rejected"),
                     enabled: true,
                   ),
                 ],
               ),
-            ],
-
-            if (pageMode == 'hold_resampling') ...[
-              const SizedBox(height: 8),
-              Text(
-                "Mode: RESAMPLING. Menunggu resampling & re-lab. Tidak dapat mengubah data.",
-                style: TextStyle(fontSize: baseFont - 1, color: Colors.black54),
-              ),
-            ],
 
             const SizedBox(height: 24),
           ],

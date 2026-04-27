@@ -11,6 +11,7 @@ SubmitUnloadingResponse _$SubmitUnloadingResponseFromJson(
 ) => SubmitUnloadingResponse(
   success: json['success'] as bool,
   message: json['message'] as String?,
+  unloading2Id: json['unloading_2_id'] as String?,
 );
 
 Map<String, dynamic> _$SubmitUnloadingResponseToJson(
@@ -18,4 +19,5 @@ Map<String, dynamic> _$SubmitUnloadingResponseToJson(
 ) => <String, dynamic>{
   'success': instance.success,
   'message': instance.message,
+  'unloading_2_id': instance.unloading2Id,
 };

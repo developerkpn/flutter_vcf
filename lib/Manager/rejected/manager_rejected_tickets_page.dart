@@ -510,7 +510,7 @@ class _ManagerRejectedDetailPageState extends State<ManagerRejectedDetailPage> {
         ..._buildPkCycleDataFromManagerDetail(detailRes.data),
       };
 
-      final hasManagerData = managerData != null && managerData.isNotEmpty;
+      final hasManagerData = managerData.isNotEmpty;
       Map<String, dynamic>? fallbackData;
       String? fallbackWarning;
 
@@ -729,6 +729,10 @@ class _ManagerRejectedDetailPageState extends State<ManagerRejectedDetailPage> {
       final d = res.data;
       if (d == null) return null;
 
+      final finishPhotos = d.unloading2History
+          ?.expand((item) => item.photos ?? const [])
+          .toList();
+
       return {
         'tank_id': d.tankId,
         'tank_name': d.tankName,
@@ -738,6 +742,7 @@ class _ManagerRejectedDetailPageState extends State<ManagerRejectedDetailPage> {
         'start_time': d.startTime,
         'end_time': d.endTime,
         'duration_minutes': d.durationMinutes,
+        'photos_count': (finishPhotos ?? d.photos)?.length,
         'remarks': d.remarks,
       };
     }

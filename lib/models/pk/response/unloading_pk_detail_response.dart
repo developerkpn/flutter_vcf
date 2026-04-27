@@ -8,11 +8,7 @@ class UnloadingPkDetailResponse {
   final String? message;
   final UnloadingPkDetailData? data;
 
-  UnloadingPkDetailResponse({
-    this.success,
-    this.message,
-    this.data,
-  });
+  UnloadingPkDetailResponse({this.success, this.message, this.data});
 
   factory UnloadingPkDetailResponse.fromJson(Map<String, dynamic> json) =>
       _$UnloadingPkDetailResponseFromJson(json);
@@ -61,6 +57,9 @@ class UnloadingPkDetailData {
   @JsonKey(name: "unloading_id")
   final String? unloadingId;
 
+  @JsonKey(name: "unloading_2_id")
+  final String? unloading2Id;
+
   @JsonKey(name: "tank_id", fromJson: _toInt)
   final int? tankId;
 
@@ -78,6 +77,24 @@ class UnloadingPkDetailData {
 
   @JsonKey(name: "hole_name")
   final String? holeName;
+
+  @JsonKey(name: "previous_tank_id", fromJson: _toInt)
+  final int? previousTankId;
+
+  @JsonKey(name: "previous_tank_code")
+  final String? previousTankCode;
+
+  @JsonKey(name: "previous_tank_name")
+  final String? previousTankName;
+
+  @JsonKey(name: "previous_hole_id", fromJson: _toInt)
+  final int? previousHoleId;
+
+  @JsonKey(name: "previous_hole_code")
+  final String? previousHoleCode;
+
+  @JsonKey(name: "previous_hole_name")
+  final String? previousHoleName;
 
   @JsonKey(name: "unloading_status")
   final String? unloadingStatus;
@@ -110,6 +127,12 @@ class UnloadingPkDetailData {
 
   final List<UnloadingPkPhoto>? photos;
 
+  @JsonKey(name: "unloading_history")
+  final List<UnloadingPkHistory>? unloadingHistory;
+
+  @JsonKey(name: "unloading_2_history")
+  final List<UnloadingPkHistory>? unloading2History;
+
   UnloadingPkDetailData({
     this.registrationId,
     this.processId,
@@ -124,12 +147,19 @@ class UnloadingPkDetailData {
     this.transporterName,
     this.registStatus,
     this.unloadingId,
+    this.unloading2Id,
     this.tankId,
     this.tankCode,
     this.tankName,
     this.holeId,
     this.holeCode,
     this.holeName,
+    this.previousTankId,
+    this.previousTankCode,
+    this.previousTankName,
+    this.previousHoleId,
+    this.previousHoleCode,
+    this.previousHoleName,
     this.unloadingStatus,
     this.remarks,
     this.startTime,
@@ -141,6 +171,8 @@ class UnloadingPkDetailData {
     this.vendorMoisture,
     this.brutoWeight,
     this.photos,
+    this.unloadingHistory,
+    this.unloading2History,
   });
 
   factory UnloadingPkDetailData.fromJson(Map<String, dynamic> json) =>
@@ -154,6 +186,70 @@ class UnloadingPkDetailData {
     if (v is num) return v.toInt();
     return int.tryParse(v.toString());
   }
+}
+
+@JsonSerializable()
+class UnloadingPkHistory {
+  @JsonKey(name: "unloading_id")
+  final String? unloadingId;
+
+  @JsonKey(name: "unloading_2_id")
+  final String? unloading2Id;
+
+  @JsonKey(name: "tank_id", fromJson: UnloadingPkDetailData._toInt)
+  final int? tankId;
+
+  @JsonKey(name: "tank_code")
+  final String? tankCode;
+
+  @JsonKey(name: "tank_name")
+  final String? tankName;
+
+  @JsonKey(name: "hole_id", fromJson: UnloadingPkDetailData._toInt)
+  final int? holeId;
+
+  @JsonKey(name: "hole_code")
+  final String? holeCode;
+
+  @JsonKey(name: "hole_name")
+  final String? holeName;
+
+  final String? remarks;
+
+  final String? status;
+
+  @JsonKey(name: "cycle", fromJson: UnloadingPkDetailData._toInt)
+  final int? cycle;
+
+  @JsonKey(name: "start_time")
+  final String? startTime;
+
+  @JsonKey(name: "end_time")
+  final String? endTime;
+
+  final List<UnloadingPkPhoto>? photos;
+
+  UnloadingPkHistory({
+    this.unloadingId,
+    this.unloading2Id,
+    this.tankId,
+    this.tankCode,
+    this.tankName,
+    this.holeId,
+    this.holeCode,
+    this.holeName,
+    this.remarks,
+    this.status,
+    this.cycle,
+    this.startTime,
+    this.endTime,
+    this.photos,
+  });
+
+  factory UnloadingPkHistory.fromJson(Map<String, dynamic> json) =>
+      _$UnloadingPkHistoryFromJson(json);
+
+  Map<String, dynamic> toJson() => _$UnloadingPkHistoryToJson(this);
 }
 
 @JsonSerializable()

@@ -31,7 +31,6 @@ class InputUnloadingPOMEPage extends StatefulWidget {
 class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
   final TextEditingController remarksCtrl = TextEditingController();
   final double baseFont = 15;
-  static const bool _holdFeatureEnabled = false;
 
   bool disableHoldButton = false;
   bool unloadingStarted = false;
@@ -50,6 +49,9 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
   int? selectedTankId;
   int? selectedHoleId;
 
+  bool get _isFinishStage => widget.stage == UnloadingPOMEStage.finish;
+  bool get _selectionReadOnly => isReadOnly || _isFinishStage;
+
   @override
   void initState() {
     super.initState();
@@ -57,7 +59,7 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
     api = ApiService(_dio);
 
     _loadMasterData();
-    _loadExistingUnloadingIfHold();
+    _loadExistingUnloadingData();
   }
 
   bool _isHoldTicket() {
@@ -67,8 +69,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
         (widget.model.regist_status ?? '').toLowerCase().trim();
     final startStatus =
         (widget.model.unloading_status ?? '').toLowerCase().trim();
-    final finishStatus =
-        (widget.model.unloading_2_status ?? '').toLowerCase().trim();
 
     if (latestStatus == widget.stage.holdStatus ||
         registStatus == widget.stage.holdStatus) {
@@ -82,19 +82,19 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
     return false;
   }
 
-  Future<void> _loadExistingUnloadingIfHold() async {
+  Future<void> _loadExistingUnloadingData() async {
+    if (_isFinishStage) {
+      await _loadStartUnloadingDetail();
+      return;
+    }
+
     if (!_isHoldTicket()) return;
 
     try {
-      final detail = widget.stage == UnloadingPOMEStage.start
-          ? await api.getUnloadingPomeDetail(
-              "Bearer ${widget.token}",
-              widget.model.registration_id!,
-            )
-          : await api.getFinishUnloadingPomeDetail(
-              "Bearer ${widget.token}",
-              widget.model.registration_id!,
-            );
+      final detail = await api.getUnloadingPomeDetail(
+        "Bearer ${widget.token}",
+        widget.model.registration_id!,
+      );
 
       final d = detail.data;
 
@@ -114,6 +114,29 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error load detail HOLD: $e")),
+      );
+    }
+  }
+
+  Future<void> _loadStartUnloadingDetail() async {
+    try {
+      final detail = await api.getUnloadingPomeDetail(
+        "Bearer ${widget.token}",
+        widget.model.registration_id!,
+      );
+
+      final d = detail.data;
+
+      if (!mounted) return;
+      setState(() {
+        selectedTankId = d?.tankId;
+        selectedHoleId = d?.holeId;
+        remarksCtrl.text = d?.remarks ?? "";
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error load start unloading: $e")),
       );
     }
   }
@@ -172,6 +195,24 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
       final bytes = f!.readAsBytesSync();
       return "data:image/jpeg;base64,${base64Encode(bytes)}";
     }).toList();
+  }
+
+  bool _hasAtLeastOneNewPhoto() {
+    return _image1 != null ||
+        _image2 != null ||
+        _image3 != null ||
+        _image4 != null;
+  }
+
+  bool _ensureAtLeastOneNewPhoto(String actionLabel) {
+    if (_hasAtLeastOneNewPhoto()) return true;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Ambil minimal 1 foto baru sebelum $actionLabel"),
+      ),
+    );
+    return false;
   }
 
   Future<bool> _startUnloading() async {
@@ -240,17 +281,8 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
     );
   }
 
-  Future<void> _confirmAndSubmit(String status) async {
-    if (!await _startUnloading()) return;
-
-    await _showConfirmDialog(
-      title: "Konfirmasi Simpan",
-      message: "Apakah anda yakin menyimpan data Unloading?",
-      onConfirm: () => _submit(status),
-    );
-  }
-
   Future<void> _confirmAndFinish() async {
+    if (!_ensureAtLeastOneNewPhoto("approve unloading")) return;
     if (!await _startUnloading()) return;
 
     await _showConfirmDialog(
@@ -258,70 +290,6 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
       message: "Apakah anda yakin menyelesaikan unloading?",
       onConfirm: _finishUnloading,
     );
-  }
-
-  Future<void> _submit(String status) async {
-    if (_isSubmitting) return;
-
-    setState(() => _isSubmitting = true);
-
-    final photos = _collectPhotosBase64();
-
-    final payload = {
-      "registration_id": widget.model.registration_id,
-      "status": status,
-      "tank_id": selectedTankId,
-      "hole_id": selectedHoleId,
-      "remarks": remarksCtrl.text.trim(),
-      if (photos.isNotEmpty) "photos": photos,
-    };
-
-    log(
-      '[POME ${widget.stage.name}] submit regId=${widget.model.registration_id} '
-      'ticket=${widget.model.wb_ticket_no} status=$status '
-      'tank=$selectedTankId hole=$selectedHoleId photos=${photos.length}',
-      name: 'unloading_pome_submit',
-    );
-
-    try {
-      final res = widget.stage == UnloadingPOMEStage.start
-          ? await api.submitUnloadingPome(
-              "Bearer ${widget.token}",
-              payload,
-            )
-          : await api.submitFinishUnloadingPome(
-              "Bearer ${widget.token}",
-              payload,
-            );
-
-      log(
-        '[POME ${widget.stage.name}] submit response success=${res.success} '
-        'message=${res.message}',
-        name: 'unloading_pome_submit',
-      );
-
-      if (res.success) {
-        if (!mounted) return;
-        Navigator.pop(context, {
-          "registration_id": widget.model.registration_id,
-          "plate_number": widget.model.plate_number,
-          "wb_ticket_no": widget.model.wb_ticket_no,
-          "status": status,
-        });
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res.message ?? "Gagal submit")),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
   }
 
   Future<void> _finishUnloading() async {
@@ -420,61 +388,70 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
             const SizedBox(height: 12),
 
             // Dropdown Tank
-            DropdownButtonFormField<int>(
-              value: selectedTankId,
-              decoration: _dec("Pilih Tank"),
-              items: tanks
-                  .map(
-                    (t) => DropdownMenuItem(
-                      value: t.id,
-                      child: Text(
-                        "${t.tank_code} — ${t.tank_name}",
-                        style: TextStyle(
-                          fontSize: baseFont,
-                          fontWeight: FontWeight.normal,
-                          color: Colors.black,
+            if (_isFinishStage)
+              _fieldReadOnly("Tank", _tankLabel(selectedTankId))
+            else
+              DropdownButtonFormField<int>(
+                value: selectedTankId,
+                decoration: _dec("Pilih Tank"),
+                items: tanks
+                    .map(
+                      (t) => DropdownMenuItem(
+                        value: t.id,
+                        child: Text(
+                          "${t.tank_code} — ${t.tank_name}",
+                          style: TextStyle(
+                            fontSize: baseFont,
+                            fontWeight: FontWeight.normal,
+                            color: Colors.black,
+                          ),
                         ),
                       ),
-                    ),
-                  )
-                  .toList(),
-              onChanged:
-                  isReadOnly ? null : (v) => setState(() => selectedTankId = v),
-            ),
+                    )
+                    .toList(),
+                onChanged:
+                    _selectionReadOnly ? null : (v) => setState(() => selectedTankId = v),
+              ),
 
             const SizedBox(height: 12),
 
             // Dropdown Hole
-            DropdownButtonFormField<int>(
-              value: selectedHoleId,
-              decoration: _dec("Pilih Hole"),
-              items: holes
-                  .map(
-                    (h) => DropdownMenuItem(
-                      value: h.id,
-                      child: Text(
-                        "${h.hole_code} — ${h.hole_name}",
-                        style: TextStyle(
-                          fontSize: baseFont,
-                          fontWeight: FontWeight.normal,
-                          color: Colors.black,
+            if (_isFinishStage)
+              _fieldReadOnly("Hole", _holeLabel(selectedHoleId))
+            else
+              DropdownButtonFormField<int>(
+                value: selectedHoleId,
+                decoration: _dec("Pilih Hole"),
+                items: holes
+                    .map(
+                      (h) => DropdownMenuItem(
+                        value: h.id,
+                        child: Text(
+                          "${h.hole_code} — ${h.hole_name}",
+                          style: TextStyle(
+                            fontSize: baseFont,
+                            fontWeight: FontWeight.normal,
+                            color: Colors.black,
+                          ),
                         ),
                       ),
-                    ),
-                  )
-                  .toList(),
-              onChanged:
-                  isReadOnly ? null : (v) => setState(() => selectedHoleId = v),
-            ),
+                    )
+                    .toList(),
+                onChanged:
+                    _selectionReadOnly ? null : (v) => setState(() => selectedHoleId = v),
+              ),
 
             const SizedBox(height: 12),
 
-            TextField(
-              controller: remarksCtrl,
-              maxLines: 3,
-              decoration: _dec("Remarks"),
-              style: TextStyle(fontSize: baseFont),
-            ),
+            if (_isFinishStage)
+              _fieldReadOnly("Remarks", remarksCtrl.text)
+            else
+              TextField(
+                controller: remarksCtrl,
+                maxLines: 3,
+                decoration: _dec("Remarks"),
+                style: TextStyle(fontSize: baseFont),
+              ),
 
             const SizedBox(height: 12),
 
@@ -524,26 +501,15 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
             const SizedBox(height: 30),
 
             if (widget.stage == UnloadingPOMEStage.start)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _btn(
-                    "Hold",
-                    Colors.orange,
-                    () => _confirmAndSubmit("hold"),
-                    enabled: _holdFeatureEnabled && !disableHoldButton,
-                  ),
-                  _btn(
+              Center(
+                child: SizedBox(
+                  width: 140,
+                  child: _btn(
                     "Approve",
                     Colors.blue,
                     _confirmAndFinish,
                   ),
-                  _btn(
-                    "Reject",
-                    Colors.red,
-                    () => _confirmAndSubmit("cancel"),
-                  ),
-                ],
+                ),
               )
             else
               Center(
@@ -568,6 +534,26 @@ class _InputUnloadingPOMEPageState extends State<InputUnloadingPOMEPage> {
         filled: true,
         fillColor: Colors.white,
       );
+
+  String _tankLabel(int? tankId) {
+    if (tankId == null) return "-";
+    final tank = tanks.cast<TankItem?>().firstWhere(
+      (item) => item?.id == tankId,
+      orElse: () => null,
+    );
+    if (tank == null) return tankId.toString();
+    return "${tank.tank_code} - ${tank.tank_name}";
+  }
+
+  String _holeLabel(int? holeId) {
+    if (holeId == null) return "-";
+    final hole = holes.cast<HoleItem?>().firstWhere(
+      (item) => item?.id == holeId,
+      orElse: () => null,
+    );
+    if (hole == null) return holeId.toString();
+    return "${hole.hole_code} - ${hole.hole_name}";
+  }
 
   Widget _fieldReadOnly(String label, String? value) {
     if (label == "Plat Kendaraan") {

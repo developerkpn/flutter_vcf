@@ -40,12 +40,19 @@ UnloadingPkDetailData _$UnloadingPkDetailDataFromJson(
   transporterName: json['transporter_name'] as String?,
   registStatus: json['regist_status'] as String?,
   unloadingId: json['unloading_id'] as String?,
+  unloading2Id: json['unloading_2_id'] as String?,
   tankId: UnloadingPkDetailData._toInt(json['tank_id']),
   tankCode: json['tank_code'] as String?,
   tankName: json['tank_name'] as String?,
   holeId: UnloadingPkDetailData._toInt(json['hole_id']),
   holeCode: json['hole_code'] as String?,
   holeName: json['hole_name'] as String?,
+  previousTankId: UnloadingPkDetailData._toInt(json['previous_tank_id']),
+  previousTankCode: json['previous_tank_code'] as String?,
+  previousTankName: json['previous_tank_name'] as String?,
+  previousHoleId: UnloadingPkDetailData._toInt(json['previous_hole_id']),
+  previousHoleCode: json['previous_hole_code'] as String?,
+  previousHoleName: json['previous_hole_name'] as String?,
   unloadingStatus: json['unloading_status'] as String?,
   remarks: json['remarks'] as String?,
   startTime: json['start_time'] as String?,
@@ -58,6 +65,12 @@ UnloadingPkDetailData _$UnloadingPkDetailDataFromJson(
   brutoWeight: json['bruto_weight'] as String?,
   photos: (json['photos'] as List<dynamic>?)
       ?.map((e) => UnloadingPkPhoto.fromJson(e as Map<String, dynamic>))
+      .toList(),
+  unloadingHistory: (json['unloading_history'] as List<dynamic>?)
+      ?.map((e) => UnloadingPkHistory.fromJson(e as Map<String, dynamic>))
+      .toList(),
+  unloading2History: (json['unloading_2_history'] as List<dynamic>?)
+      ?.map((e) => UnloadingPkHistory.fromJson(e as Map<String, dynamic>))
       .toList(),
 );
 
@@ -77,12 +90,19 @@ Map<String, dynamic> _$UnloadingPkDetailDataToJson(
   'transporter_name': instance.transporterName,
   'regist_status': instance.registStatus,
   'unloading_id': instance.unloadingId,
+  'unloading_2_id': instance.unloading2Id,
   'tank_id': instance.tankId,
   'tank_code': instance.tankCode,
   'tank_name': instance.tankName,
   'hole_id': instance.holeId,
   'hole_code': instance.holeCode,
   'hole_name': instance.holeName,
+  'previous_tank_id': instance.previousTankId,
+  'previous_tank_code': instance.previousTankCode,
+  'previous_tank_name': instance.previousTankName,
+  'previous_hole_id': instance.previousHoleId,
+  'previous_hole_code': instance.previousHoleCode,
+  'previous_hole_name': instance.previousHoleName,
   'unloading_status': instance.unloadingStatus,
   'remarks': instance.remarks,
   'start_time': instance.startTime,
@@ -94,7 +114,47 @@ Map<String, dynamic> _$UnloadingPkDetailDataToJson(
   'vendor_moisture': instance.vendorMoisture,
   'bruto_weight': instance.brutoWeight,
   'photos': instance.photos,
+  'unloading_history': instance.unloadingHistory,
+  'unloading_2_history': instance.unloading2History,
 };
+
+UnloadingPkHistory _$UnloadingPkHistoryFromJson(Map<String, dynamic> json) =>
+    UnloadingPkHistory(
+      unloadingId: json['unloading_id'] as String?,
+      unloading2Id: json['unloading_2_id'] as String?,
+      tankId: UnloadingPkDetailData._toInt(json['tank_id']),
+      tankCode: json['tank_code'] as String?,
+      tankName: json['tank_name'] as String?,
+      holeId: UnloadingPkDetailData._toInt(json['hole_id']),
+      holeCode: json['hole_code'] as String?,
+      holeName: json['hole_name'] as String?,
+      remarks: json['remarks'] as String?,
+      status: json['status'] as String?,
+      cycle: UnloadingPkDetailData._toInt(json['cycle']),
+      startTime: json['start_time'] as String?,
+      endTime: json['end_time'] as String?,
+      photos: (json['photos'] as List<dynamic>?)
+          ?.map((e) => UnloadingPkPhoto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+
+Map<String, dynamic> _$UnloadingPkHistoryToJson(UnloadingPkHistory instance) =>
+    <String, dynamic>{
+      'unloading_id': instance.unloadingId,
+      'unloading_2_id': instance.unloading2Id,
+      'tank_id': instance.tankId,
+      'tank_code': instance.tankCode,
+      'tank_name': instance.tankName,
+      'hole_id': instance.holeId,
+      'hole_code': instance.holeCode,
+      'hole_name': instance.holeName,
+      'remarks': instance.remarks,
+      'status': instance.status,
+      'cycle': instance.cycle,
+      'start_time': instance.startTime,
+      'end_time': instance.endTime,
+      'photos': instance.photos,
+    };
 
 UnloadingPkPhoto _$UnloadingPkPhotoFromJson(Map<String, dynamic> json) =>
     UnloadingPkPhoto(

@@ -13,13 +13,8 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 class InputLabPOMEPage extends StatefulWidget {
   final String token;
   final QcLabPomeVehicle model;
-  
 
-  const InputLabPOMEPage({
-    super.key,
-    required this.token,
-    required this.model,
-  });
+  const InputLabPOMEPage({super.key, required this.token, required this.model});
 
   @override
   State<InputLabPOMEPage> createState() => _InputLabPOMEPageState();
@@ -29,6 +24,7 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
   final TextEditingController ffaCtrl = TextEditingController();
   final TextEditingController moistCtrl = TextEditingController();
   final TextEditingController remarksCtrl = TextEditingController();
+  final TextEditingController remarksHoldCtrl = TextEditingController();
 
   late ApiService api;
   bool _isSubmitting = false;
@@ -58,7 +54,8 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
     isQcEnabled = true;
 
     if (isHoldCase) {
-      _loadHoldData(); // isi FFA, Moisture, Remarks dari API
+      _loadHoldData();
+      isQcEnabled = false; // isi FFA, Moisture, Remarks dari API
     }
 
     debugPrint("=== INIT InputLabPOMEPage ===");
@@ -73,6 +70,7 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
     ffaCtrl.dispose();
     moistCtrl.dispose();
     remarksCtrl.dispose();
+    remarksHoldCtrl.dispose();
     super.dispose();
   }
 
@@ -90,6 +88,10 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
           ffaCtrl.text = res.data!.ffa ?? "";
           moistCtrl.text = res.data!.moisture ?? "";
           remarksCtrl.text = res.data!.remarks ?? "";
+
+          // if (res.data!.remarksHold != null) {
+          //   remarksCtrlHold.text = res.data!.remarksHold!;
+          // }
           // Foto TIDAK di-load ulang, supaya saat HOLD dibuka
           // user diminta ambil foto baru.
           _image1 = _image2 = _image3 = _image4 = null;
@@ -123,10 +125,18 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
         final f = File(picked.path);
         setState(() {
           switch (index) {
-            case 1: _image1 = f; break;
-            case 2: _image2 = f; break;
-            case 3: _image3 = f; break;
-            case 4: _image4 = f; break;
+            case 1:
+              _image1 = f;
+              break;
+            case 2:
+              _image2 = f;
+              break;
+            case 3:
+              _image3 = f;
+              break;
+            case 4:
+              _image4 = f;
+              break;
           }
         });
       }
@@ -137,8 +147,30 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
     }
   }
 
+  bool _hasAtLeastOnePhoto() {
+    return _image1 != null ||
+        _image2 != null ||
+        _image3 != null ||
+        _image4 != null;
+  }
 
-  bool _validateInputs() {
+  bool _validateInputs(status) {
+    if (status == 'rejected' || status == 'hold') {
+      if (remarksCtrl.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Harap isi Remarks terlebih dahulu")),
+        );
+        return false;
+      }
+      
+      if (isHoldCase && remarksHoldCtrl.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Harap isi Remarks Hold terlebih dahulu")),
+        );
+        return false;
+      }
+    }
+
     if (ffaCtrl.text.isEmpty || moistCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Input FFA & Moisture wajib diisi")),
@@ -157,13 +189,18 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
     }
 
     // Range dasar biar gak aneh-aneh
-    if (ffa < 0 ||
-        ffa > 100 ||
-        moisture < 0 ||
-        moisture > 100) {
+    if (ffa < 0 || ffa > 100 || moisture < 0 || moisture > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Nilai FFA/Moisture di luar batas wajar")),
+      );
+      return false;
+    }
+
+    if (!_hasAtLeastOnePhoto()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text("Nilai FFA/Moisture di luar batas wajar")),
+          content: Text("Ambil minimal 1 foto baru hasil lab sebelum lanjut"),
+        ),
       );
       return false;
     }
@@ -185,7 +222,7 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
   }
 
   Future<void> _submit(String status) async {
-    if (!_validateInputs()) return;
+    if (!_validateInputs(status)) return;
 
     setState(() => _isSubmitting = true);
 
@@ -206,6 +243,7 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
         "ffa": double.parse(ffaCtrl.text.replaceAll(',', '.')),
         "moisture": double.parse(moistCtrl.text.replaceAll(',', '.')),
         "remarks": remarksCtrl.text.trim(),
+        "remarks_hold": (isHoldCase) ? remarksHoldCtrl.text.trim() : null,
         "status": status,
         if (photos.isNotEmpty) "photos": photos,
       };
@@ -213,17 +251,15 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
       debugPrint("Payload POME dikirim:");
       debugPrint(const JsonEncoder.withIndent('  ').convert(payload));
 
-      final res = await api.submitLabPome(
-        "Bearer ${widget.token}",
-        payload,
-      );
+      final res = await api.submitLabPome("Bearer ${widget.token}", payload);
 
       if (!mounted) return;
       if (res.success == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text("QC Lab POME ${status.toUpperCase()} berhasil dikirim"),
+            content: Text(
+              "QC Lab POME ${status.toUpperCase()} berhasil dikirim",
+            ),
           ),
         );
         Navigator.pop(context, {
@@ -241,21 +277,20 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
       debugPrint("DioException POME: ${e.response?.data}");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text("Error: ${e.response?.data['message'] ?? e.message}"),
+          content: Text("Error: ${e.response?.data['message'] ?? e.message}"),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   void _confirm(String title, String msg, String status) {
-    if (!_validateInputs()) return;
+    if (!_validateInputs(status)) return;
 
     showDialog(
       context: context,
@@ -289,7 +324,6 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -306,19 +340,23 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
               _plateWidget(widget.model.plateNumber ?? "-"),
 
               _readonlyBox(
-                  "Nomor Tiket Timbang", widget.model.wbTicketNo ?? "-"),
+                "Nomor Tiket Timbang",
+                widget.model.wbTicketNo ?? "-",
+              ),
               _readonlyBox("Supir", widget.model.driverName ?? "-"),
               _readonlyBox("Kode Vendor", widget.model.vendorCode ?? "-"),
               _readonlyBox("Nama Vendor", widget.model.vendorName ?? "-"),
+              _readonlyBox("Kode Komoditi", widget.model.commodityCode ?? "-"),
+              _readonlyBox("Nama Komoditi", widget.model.commodityName ?? "-"),
               _readonlyBox(
-                  "Kode Komoditi", widget.model.commodityCode ?? "-"),
-              _readonlyBox(
-                  "Nama Komoditi", widget.model.commodityName ?? "-"),
-              _readonlyBox(
-                  "Bruto Weight (Kg)", widget.model.brutoWeight ?? "-"),
+                "Bruto Weight (Kg)",
+                widget.model.brutoWeight ?? "-",
+              ),
               _readonlyBox("Vendor FFA", widget.model.vendorFfa ?? "-"),
               _readonlyBox(
-                  "Vendor Moisture", widget.model.vendorMoisture ?? "-"),
+                "Vendor Moisture",
+                widget.model.vendorMoisture ?? "-",
+              ),
 
               const SizedBox(height: 10),
 
@@ -326,16 +364,21 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
                 padding: EdgeInsets.symmetric(vertical: 6),
                 child: Text(
                   "Input QC Data",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                 ),
               ),
 
               _numberInput("FFA (%)", ffaCtrl),
               _numberInput("Moisture (%)", moistCtrl),
               _input("Remarks", remarksCtrl, maxLines: 2),
+
+              if (isHoldCase)
+                _input(
+                  "Remarks Hold",
+                  remarksHoldCtrl,
+                  maxLines: 2,
+                  isEnabled: true,
+                ),
 
               const SizedBox(height: 12),
 
@@ -358,23 +401,18 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
                       children: [
                         const Text(
                           "Ambil Gambar Hasil Lab",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: TextStyle(fontWeight: FontWeight.w500),
                         ),
                         Checkbox(
                           value: isCameraEnabled,
-                          onChanged: isQcEnabled
-                              ? (v) {
-                                  setState(() {
-                                    isCameraEnabled = v ?? false;
-                                    if (!isCameraEnabled) {
-                                      _image1 = _image2 =
-                                          _image3 = _image4 = null;
-                                    }
-                                  });
-                                }
-                              : null,
+                          onChanged: (v) {
+                            setState(() {
+                              isCameraEnabled = v ?? false;
+                              if (!isCameraEnabled) {
+                                _image1 = _image2 = _image3 = _image4 = null;
+                              }
+                            });
+                          },
                         ),
                       ],
                     ),
@@ -435,24 +473,24 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
   // ==================== WIDGET BANTUAN ====================
 
   Widget _readonlyBox(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(k, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                border: Border.all(color: Colors.black54),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(v),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(k, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            border: Border.all(color: Colors.black54),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(v),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _plateWidget(String plate) {
     return Padding(
@@ -460,34 +498,35 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Plat Kendaraan",
-            style: TextStyle(fontSize: 14),
-          ),
+          const Text("Plat Kendaraan", style: TextStyle(fontSize: 14)),
           const SizedBox(height: 4),
           Text(
             plate,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-  Widget _input(String label, TextEditingController c, {int maxLines = 1}) {
+  Widget _input(
+    String label,
+    TextEditingController c, {
+    int maxLines = 1,
+    bool isEnabled = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: TextField(
         controller: c,
-        readOnly: !isQcEnabled,
+        readOnly: !isQcEnabled && !isEnabled,
         maxLines: maxLines,
         decoration: InputDecoration(
           labelText: label,
           filled: true,
-          fillColor: isQcEnabled ? Colors.white : Colors.grey.shade300,
+          fillColor: (isQcEnabled || isEnabled)
+              ? Colors.white
+              : Colors.grey.shade300,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
@@ -500,8 +539,7 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
       child: TextField(
         controller: c,
         readOnly: !isQcEnabled,
-        keyboardType:
-            const TextInputType.numberWithOptions(decimal: true),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
         ],
@@ -516,27 +554,24 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
   }
 
   Widget _cameraBox(int i, File? f) => GestureDetector(
-        onTap: isCameraEnabled ? () => _getImage(i) : null,
-        child: AspectRatio(
-          aspectRatio: 3 / 4,
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(),
-              borderRadius: BorderRadius.circular(8),
-              color: isCameraEnabled ? Colors.white : Colors.grey.shade400,
-            ),
-            child: f == null
-                ? const Icon(Icons.camera_alt)
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      f,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-          ),
+    onTap: isCameraEnabled ? () => _getImage(i) : null,
+    child: AspectRatio(
+      aspectRatio: 3 / 4,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(),
+          borderRadius: BorderRadius.circular(8),
+          color: isCameraEnabled ? Colors.white : Colors.grey.shade400,
         ),
-      );
+        child: f == null
+            ? const Icon(Icons.camera_alt)
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(f, fit: BoxFit.cover),
+              ),
+      ),
+    ),
+  );
 
   Widget _btn(
     String label,
@@ -548,7 +583,7 @@ class _InputLabPOMEPageState extends State<InputLabPOMEPage> {
       style: ElevatedButton.styleFrom(
         backgroundColor: disabled ? Colors.grey : color,
       ),
-      onPressed: disabled || _isSubmitting || !isQcEnabled ? null : onPressed,
+      onPressed: disabled || _isSubmitting ? null : onPressed,
       child: Text(label),
     );
   }

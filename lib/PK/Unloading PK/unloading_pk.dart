@@ -8,11 +8,53 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'add_unloading_pk.dart';
 import 'input_unloading_pk.dart';
 
+enum UnloadingPKStage { start, finish }
+
+extension UnloadingPKStageX on UnloadingPKStage {
+  String get title => this == UnloadingPKStage.start
+      ? 'Dashboard Start Unloading PK'
+      : 'Dashboard Finish Unloading PK';
+
+  String get emptyMessage => this == UnloadingPKStage.start
+      ? 'Belum ada kendaraan untuk Start Unloading.'
+      : 'Belum ada kendaraan untuk Finish Unloading.';
+
+  List<String> get activeStatuses => this == UnloadingPKStage.start
+      ? [
+          'finish_unloading',
+          'finish_reunloading_1',
+          'finish_reunloading_2',
+          'qc_lab_hold',
+          'qc_resampling',
+          'qc_relab',
+        ]
+      : [
+          'finish_unloading',
+          'finish_reunloading_1',
+          'finish_reunloading_2',
+          'qc_lab_hold',
+          'qc_resampling',
+          'qc_relab',
+          'finish_unloading_rejected',
+          'done',
+          'completed',
+          'wb_out',
+        ];
+
+  bool get hasAddButton => true;
+}
+
 class UnloadingPKPage extends StatefulWidget {
   final String userId;
   final String token;
+  final UnloadingPKStage stage;
 
-  const UnloadingPKPage({super.key, required this.userId, required this.token});
+  const UnloadingPKPage({
+    super.key,
+    required this.userId,
+    required this.token,
+    this.stage = UnloadingPKStage.start,
+  });
 
   @override
   State<UnloadingPKPage> createState() => _UnloadingPKPageState();
@@ -28,159 +70,334 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
     return prefs.getString("jwt_token") ?? widget.token;
   }
 
-  String normalizedStatus(String? registStatus, String? unloadingStatus) {
-    final reg = (registStatus ?? "").toLowerCase();
-    final unload = (unloadingStatus ?? "").toLowerCase();
-    final hasRejectedStatus =
-        reg.contains("rejected") || unload.contains("rejected");
+  String _registStatus(model.UnloadingPkModel t) =>
+      (t.registStatus ?? '').toLowerCase().trim();
 
-    if (reg.contains("cancel") || unload.contains("cancel")) {
-      return "cancel";
+  String _counterLabel(model.UnloadingPkModel t) =>
+      (t.counterStatusLabel ?? '').toLowerCase().trim();
+
+  String _unloadingStatus(model.UnloadingPkModel t) =>
+      (t.unloadingStatus ?? '').toLowerCase().trim();
+
+  int _cycle(model.UnloadingPkModel t) =>
+      (t.cycle ?? t.counter ?? t.resamplingCounter ?? 0).clamp(0, 2);
+
+  int _counter(model.UnloadingPkModel t) =>
+      (t.counter ?? t.resamplingCounter ?? 0).clamp(0, 2);
+
+  String _stageStatus(model.UnloadingPkModel t) {
+    final s = _registStatus(t);
+    final label = _counterLabel(t);
+    final cycle = _cycle(t);
+    final counter = _counter(t);
+
+    if (s == 'qc_lab_hold') {
+      return 'qc_lab_hold';
     }
 
-    if (reg == "random_check") return "pending_manager_approval";
+    if (s == 'qc_resampling') {
+      return counter >= 2 ? 'resampling_2' : 'resampling_1';
+    }
+    if (s == 'qc_relab') {
+      return counter >= 2 ? 'relab_2' : 'relab_1';
+    }
+    if (label.startsWith('resampling_') || label.startsWith('relab_')) {
+      return label;
+    }
+    if (label.startsWith('reunloading_')) {
+      return label;
+    }
+    if (s == 'start_reunloading_2' ||
+        s == 'finish_reunloading_2' ||
+        cycle >= 2) {
+      return 'reunloading_2';
+    }
+    if (s == 'start_reunloading_1' ||
+        s == 'finish_reunloading_1' ||
+        cycle == 1) {
+      return 'reunloading_1';
+    }
+    if (label == 'unloading') {
+      return 'unloading';
+    }
+    return s;
+  }
 
-    if (hasRejectedStatus) {
-      // If registration already moved forward, follow registration stage.
-      if (reg == "wb_out") return "done";
-      if (reg == "qc_resampling") return "qc_resampling";
-      if (reg == "qc_reunloading") return "qc_reunloading";
-      return "rejected";
+  bool _shouldShow(model.UnloadingPkModel t) {
+    final s = _registStatus(t);
+    final stage = _stageStatus(t);
+    final cycle = _cycle(t);
+
+    if (widget.stage == UnloadingPKStage.start) {
+      return _unloadingStatus(t) == 'approved' ||
+         s == 'qc_lab_hold' ||
+         s == 'start_reunloading_1' ||
+         s == 'start_reunloading_2';
     }
 
-    // HOLD tahap unloading (sudah selesai resampling + relab)
-    if (reg == "unloading" && unload == "hold") return "hold_unloading";
+    if (s == 'qc_lab_hold' || stage == 'qc_lab_hold') {
+      return true;
+    }
 
-    // HOLD tahap re-unloading
-    if (reg == "qc_reunloading" && unload == "hold") return "hold_reunloading";
+    if (s == 'wb_out') {
+      return true;
+    }
 
-    // HOLD tahap resampling (baru mulai resampling)
-    if (reg == "qc_resampling" && unload == "hold") return "hold_resampling";
+    // Finish stage: jangan tampilkan reunloading yang belum di-approve (belum ada start_time)
+    if (stage.startsWith('reunloading_')) {
+      final hasStartTime = (t.startTime ?? '').isNotEmpty;
+      if (!hasStartTime) return false;
+    }
 
-    if (reg == "qc_resampling") return "qc_resampling";
-    if (reg == "qc_reunloading") return "qc_reunloading";
-    if (reg == "wb_out") return "done";
-    if (unload == "approved") return "done";
-
-    return reg.isNotEmpty ? reg : unload;
+    return (widget.stage.activeStatuses.contains(s) &&
+            s != 'finish_unloading') ||
+        stage.startsWith('resampling_') ||
+        stage.startsWith('relab_') ||
+        stage.startsWith('reunloading_') ||
+        cycle > 0;
   }
 
-  int _resolveReunloadingStep(model.UnloadingPkModel t) {
-    final c1 = t.counter;
-    if (c1 != null && c1 > 0) return c1;
-
-    final c2 = t.resamplingCounter;
-    if (c2 != null && c2 > 0) return c2;
-
-    final reg = (t.registStatus ?? '').toLowerCase().trim();
-    if (reg == 'qc_reunloading') return 2;
-
-    return 1;
+  bool _isClickable(model.UnloadingPkModel t) {
+    final s = _registStatus(t);
+    final stage = _stageStatus(t);
+    if (widget.stage == UnloadingPKStage.start) {
+      return s == 'start_unloading' ||
+          s == 'start_reunloading_1' ||
+          s == 'start_reunloading_2';
+    }
+    if (s == 'wb_out') {
+      return false;
+    }
+    return stage == 'unloading' || stage.startsWith('reunloading_');
   }
 
-  String displayStatus(String status, model.UnloadingPkModel t) {
-    final step = _resolveReunloadingStep(t);
+  String _displayStatus(model.UnloadingPkModel t) {
+    final s = _registStatus(t);
+    final stage = _stageStatus(t);
+    final unloadingStatus = _unloadingStatus(t);
 
-    switch (status) {
-      case "hold_unloading":
-        return "RE-UNLOADING $step";
-      case "hold_reunloading":
-        return "RE-UNLOADING $step";
-      case "hold_resampling":
-        return "RE-UNLOADING $step";
-      case "qc_resampling":
-        return "RE-UNLOADING $step";
-      case "qc_reunloading":
-        return "RE-UNLOADING $step";
-      case "pending_manager_approval":
-        return "Pending Manager Approval";
-      case "cancel":
-        return "CANCEL";
-      case "rejected":
-        return "REJECTED";
-      case "done":
-        return "DONE";
+    if (s == 'qc_lab_hold' || stage == 'qc_lab_hold') {
+      return 'QC LAB HOLD';
+    }
+
+    if (s == 'wb_out') {
+      return 'APPROVE FINISH UNLOADING';
+    }
+
+    if (s == 'start_reunloading_1') return 'START REUNLOADING 1';
+    if (s == 'finish_reunloading_1') return 'FINISH REUNLOADING 1';
+    if (s == 'start_reunloading_2') return 'START REUNLOADING 2';
+    if (s == 'finish_reunloading_2') return 'FINISH REUNLOADING 2';
+
+    if (stage == 'resampling_2') return 'RESAMPLING 2';
+    if (stage == 'resampling_1') return 'RESAMPLING 1';
+    if (stage == 'relab_2') return 'RE-LAB 2';
+    if (stage == 'relab_1') return 'RE-LAB 1';
+    if (stage == 'reunloading_2') return 'START REUNLOADING 2';
+    if (stage == 'reunloading_1') return 'START REUNLOADING 1';
+
+    if (widget.stage == UnloadingPKStage.start) {
+      if (unloadingStatus == 'approved') {
+        if (s == 'start_reunloading_1' || stage == 'reunloading_1') {
+          return 'APPROVE START REUNLOADING 1';
+        }
+        if (s == 'start_reunloading_2' || stage == 'reunloading_2') {
+          return 'APPROVE START REUNLOADING 2';
+        }
+        return 'APPROVE START UNLOADING';
+      }
+    }
+    if (stage == 'unloading') return 'MENUNGGU FINISH';
+
+    switch (s) {
+      case 'start_unloading':
+        return 'MENUNGGU START';
+      case 'start_reunloading_1':
+        return 'MENUNGGU START';
+      case 'start_reunloading_2':
+        return 'MENUNGGU START';
+      case 'finish_unloading':
+        return 'MENUNGGU FINISH';
+      case 'qc_resampling':
+        return 'RESAMPLING';
+      case 'finish_unloading_rejected':
+        return 'REJECTED';
+      case 'done':
+      case 'completed':
+        return 'DONE';
+      case 'wb_out':
+        return 'APPROVE UNLOADING';
       default:
-        return status.toUpperCase();
+        return s.toUpperCase();
     }
   }
 
-  Color statusColor(String status) {
-    switch (status) {
-      case "hold_unloading":
+  Color _statusColor(model.UnloadingPkModel t) {
+    final s = _registStatus(t);
+    final stage = _stageStatus(t);
+    final unloadingStatus = _unloadingStatus(t);
+
+    if (s == 'qc_lab_hold' || stage == 'qc_lab_hold') {
+      return Colors.orange;
+    }
+
+    if (s == 'wb_out') {
+      return Colors.blue;
+    }
+
+    if (s == 'finish_reunloading_1') {
+      return Colors.green;
+    }
+
+    if (stage == 'resampling_1' || stage == 'resampling_2') {
+      return Colors.purple;
+    }
+    if (stage == 'relab_1' || stage == 'relab_2') {
+      return Colors.indigo;
+    }
+    if (s == 'start_reunloading_1' || s == 'start_reunloading_2') {
+      return Colors.brown;
+    }
+    if (stage == 'reunloading_1' || stage == 'reunloading_2') {
+      return Colors.orange;
+    }
+    if (stage == 'unloading') {
+      return widget.stage == UnloadingPKStage.start
+          ? Colors.green
+          : Colors.blue;
+    }
+
+    if (widget.stage == UnloadingPKStage.start &&
+        unloadingStatus == 'approved') {
+      return Colors.green;
+    }
+
+    if (widget.stage == UnloadingPKStage.start &&
+        (s == 'finish_reunloading_1' || s == 'finish_reunloading_2')) {
+      return Colors.green;
+    }
+
+    if (widget.stage == UnloadingPKStage.start) {
+      if (s == 'start_reunloading_1' || s == 'start_reunloading_2') {
+        return Colors.brown;
+      }
+      if (s == 'start_unloading') {
         return Colors.orange;
-      case "hold_reunloading":
+      }
+      if (s == 'finish_unloading' ||
+          s == 'finish_reunloading_1' ||
+          s == 'finish_reunloading_2') {
+        return Colors.green;
+      }
+    }
+
+    switch (s) {
+      case 'finish_unloading':
+        return Colors.blue;
+      case 'finish_reunloading_1':
+        return Colors.green;
+      case 'finish_reunloading_2':
         return Colors.orange;
-      case "hold_resampling":
+      case 'qc_resampling':
         return Colors.deepPurple;
-      case "qc_resampling":
-        return Colors.blue;
-      case "qc_reunloading":
-        return Colors.blue;
-      case "pending_manager_approval":
-        return Colors.yellow.shade700;
-      case "cancel":
-      case "rejected":
+      case 'finish_unloading_rejected':
         return Colors.red;
-      case "done":
+      case 'done':
+      case 'completed':
+        return Colors.green;
+      case 'wb_out':
         return Colors.green;
       default:
         return Colors.grey;
     }
   }
 
-  IconData statusIcon(String status) {
-    switch (status) {
-      case "hold_unloading":
-        return Icons.pause_circle_outline;
-      case "hold_reunloading":
-        return Icons.pause_circle_outline;
-      case "hold_resampling":
-        return Icons.repeat;
-      case "qc_resampling":
-        return Icons.refresh;
-      case "qc_reunloading":
-        return Icons.refresh;
-      case "pending_manager_approval":
-        return Icons.error_outline;
-      case "cancel":
-      case "rejected":
-        return Icons.cancel_outlined;
-      case "done":
-        return Icons.check_circle_outline;
-      default:
-        return Icons.help_outline;
-    }
-  }
+  IconData _statusIcon(model.UnloadingPkModel t) {
+    final s = _registStatus(t);
+    final stage = _stageStatus(t);
+    final unloadingStatus = _unloadingStatus(t);
 
-  bool _canOpenTicket(String status) {
-    return status == "qc_resampling" ||
-        status == "qc_reunloading" ||
-        status == "hold_unloading" ||
-        status == "hold_reunloading" ||
-        status == "hold_resampling";
+    if (s == 'qc_lab_hold' || stage == 'qc_lab_hold') {
+      return Icons.pause_circle_outline;
+    }
+
+    if (s == 'wb_out') {
+      return Icons.verified;
+    }
+
+    if (stage == 'resampling_2') return Icons.loop;
+    if (stage == 'resampling_1') return Icons.refresh;
+    if (stage == 'relab_2') return Icons.science_outlined;
+    if (stage == 'relab_1') return Icons.biotech_outlined;
+    if (s == 'finish_reunloading_2' || s == 'finish_reunloading_1') {
+      return Icons.check_circle_outline;
+    }
+    if (stage == 'reunloading_2') return Icons.loop;
+    if (stage == 'reunloading_1') return Icons.refresh;
+    if (stage == 'unloading') return Icons.check_circle_outline;
+
+    if (widget.stage == UnloadingPKStage.start &&
+        unloadingStatus == 'approved') {
+      return Icons.check_circle_outline;
+    }
+
+    if (widget.stage == UnloadingPKStage.start) {
+      if (s == 'start_unloading' ||
+          s == 'start_reunloading_1' ||
+          s == 'start_reunloading_2') {
+        return Icons.hourglass_top;
+      }
+      if (s == 'finish_unloading' ||
+          s == 'finish_reunloading_1' ||
+          s == 'finish_reunloading_2') {
+        return Icons.check_circle_outline;
+      }
+    }
+
+    switch (s) {
+      case 'finish_unloading':
+      case 'finish_reunloading_1':
+      case 'finish_reunloading_2':
+        return Icons.check_circle_outline;
+      case 'qc_resampling':
+        return Icons.refresh;
+      case 'finish_unloading_rejected':
+        return Icons.cancel_outlined;
+      case 'done':
+      case 'completed':
+        return Icons.task_alt;
+      case 'wb_out':
+        return Icons.verified;
+      default:
+        return Icons.local_shipping;
+    }
   }
 
   Future<void> _openAddPage() async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            AddUnloadingPKPage(userId: widget.userId, token: widget.token),
+        builder: (_) => AddUnloadingPKPage(
+          userId: widget.userId,
+          token: widget.token,
+          stage: widget.stage,
+        ),
       ),
     );
-
     if (result != null) setState(() {});
   }
 
-  Future<void> _openEditPage(model.UnloadingPkModel data, int index) async {
+  Future<void> _openInputPage(model.UnloadingPkModel data, int index) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => InputUnloadingPKPage(model: data, token: widget.token),
+        builder: (_) => InputUnloadingPKPage(
+          model: data,
+          token: widget.token,
+          stage: widget.stage,
+        ),
       ),
     );
-
     if (result != null) {
       setState(() => selectedIndex = index);
     }
@@ -190,7 +407,7 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Dashboard Unloading PK"),
+        title: Text(widget.stage.title),
         backgroundColor: Colors.blue,
         actions: [
           IconButton(
@@ -201,10 +418,7 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
       ),
       body: FutureBuilder<UnloadingPkResponse>(
         future: _getToken().then(
-          (t) => apiService.getUnloadingPk(
-            "Bearer $t",
-            includeRejected: true,
-          ),
+          (t) => apiService.getUnloadingPk("Bearer $t", includeRejected: true),
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -216,48 +430,35 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
             return Center(child: Text("Error: ${snapshot.error}"));
           }
 
-          final trucks = snapshot.data?.data ?? [];
+          final allData = snapshot.data?.data ?? [];
+          final trucks = allData.where(_shouldShow).toList();
 
-          final unloadingTrucks = trucks.where((e) {
-            final status = normalizedStatus(e.registStatus, e.unloadingStatus);
-            if (status.isEmpty) return false;
-
-            // Keep unloading dashboard resilient to backend status variants.
-            if (status == "sampling" ||
-                status == "lab" ||
-                status == "unloading") {
-              return false;
-            }
-
-            return true;
-          }).toList();
-
-          if (unloadingTrucks.isEmpty) {
-            return const Center(
+          if (trucks.isEmpty) {
+            return Center(
               child: Text(
-                "Belum ada tiket kendaraan.",
-                style: TextStyle(color: Colors.black54, fontSize: 16),
+                widget.stage.emptyMessage,
+                style: const TextStyle(color: Colors.black54, fontSize: 16),
               ),
             );
           }
 
           return ListView.builder(
-            itemCount: unloadingTrucks.length,
+            itemCount: trucks.length,
             itemBuilder: (_, index) {
-              final t = unloadingTrucks[index];
-              final status = normalizedStatus(
-                t.registStatus,
-                t.unloadingStatus,
-              );
+              final t = trucks[index];
+              final clickable = _isClickable(t);
+              final color = _statusColor(t);
 
               return GestureDetector(
                 onTap: () {
-                  if (_canOpenTicket(status)) {
-                    _openEditPage(t, index);
+                  if (clickable) {
+                    _openInputPage(t, index);
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Status ini tidak dapat dibuka."),
+                      SnackBar(
+                        content: Text(
+                          "Status ${_displayStatus(t)} tidak dapat dibuka.",
+                        ),
                       ),
                     );
                   }
@@ -297,23 +498,20 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
                                 vertical: 5,
                               ),
                               decoration: BoxDecoration(
-                                color: statusColor(status).withOpacity(0.15),
-                                border: Border.all(color: statusColor(status)),
+                                color: color.withValues(alpha: 0.15),
+                                border: Border.all(color: color),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(
-                                    statusIcon(status),
-                                    size: 16,
-                                    color: statusColor(status),
-                                  ),
+                                  Icon(_statusIcon(t), size: 16, color: color),
                                   const SizedBox(width: 4),
                                   Text(
-                                    displayStatus(status, t),
+                                    _displayStatus(t),
                                     style: TextStyle(
-                                      color: statusColor(status),
+                                      color: color,
                                       fontWeight: FontWeight.bold,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ],
@@ -330,11 +528,13 @@ class _UnloadingPKPageState extends State<UnloadingPKPage> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.blue,
-        onPressed: _openAddPage,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      floatingActionButton: widget.stage.hasAddButton
+          ? FloatingActionButton(
+              backgroundColor: Colors.blue,
+              onPressed: _openAddPage,
+              child: const Icon(Icons.add, color: Colors.white),
+            )
+          : null,
     );
   }
 }
