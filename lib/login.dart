@@ -15,6 +15,7 @@ import 'PK/Sample PK/home_pk.dart';
 import 'POME/Lab POME/home_lab_pome.dart';
 import 'POME/Sample POME/home_pome.dart';
 import 'POME/Unloading POME/home_unloading_pome.dart';
+import 'Sales/home_sales.dart';
 
 void main() {
   runApp(const VCFApp());
@@ -256,13 +257,40 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  bool _hasRoleKeywords(List<String> roles, List<String> keywords) {
+    return roles.any((role) {
+      final normalized = role.toLowerCase();
+      return keywords.every(normalized.contains);
+    });
+  }
+
   /// Navigate to appropriate screen based on user roles
   void _navigateByRole(List<String> roles, String username, String token) {
     Widget? destination;
 
-    // Priority: manajer > sample > lab > unloading
+    final hasSalesLabRole = _hasRoleKeywords(roles, ['sales', 'lab']);
+    final hasSalesLoadingRole = _hasRoleKeywords(roles, ['sales', 'loading']);
+    final hasSalesStartLoadingRole =
+        _hasRoleKeywords(roles, ['sales', 'start', 'loading']);
+    final hasSalesFinishLoadingRole =
+        _hasRoleKeywords(roles, ['sales', 'finish', 'loading']);
+
+    final showSalesStartLoading =
+        hasSalesStartLoadingRole || (hasSalesLoadingRole && !hasSalesFinishLoadingRole);
+    final showSalesFinishLoading =
+        hasSalesFinishLoadingRole || (hasSalesLoadingRole && !hasSalesStartLoadingRole);
+
+    // Priority: manajer > sales > sample > lab > unloading
     if (roles.contains('manajer')) {
       destination = const ManagerHomeSwipe();
+    } else if (hasSalesLabRole || showSalesStartLoading || showSalesFinishLoading) {
+      destination = HomeSalesPage(
+        userId: username,
+        token: token,
+        showLab: hasSalesLabRole,
+        showStartLoading: showSalesStartLoading,
+        showFinishLoading: showSalesFinishLoading,
+      );
     }
     // CPO roles
     else if (roles.contains('sample_operator_cpo')) {

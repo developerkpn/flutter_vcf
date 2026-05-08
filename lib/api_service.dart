@@ -374,6 +374,182 @@ abstract class ApiService {
     @Body() Map<String, dynamic> payload,
   );
 
+  // SALES ====================
+  @GET('/sales/lab/statistics')
+  Future<dynamic> getSalesLabStatistics(
+    @Header('Authorization') String token,
+  );
+
+  @GET('/qc/lab/sales/statistics')
+  Future<dynamic> getSalesLabStatisticsAlt(
+    @Header('Authorization') String token,
+  );
+
+  @GET('/sales/lab/vehicles')
+  Future<dynamic> getSalesLabVehicles(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  });
+
+  @GET('/qc/lab/sales/vehicles')
+  Future<dynamic> getSalesLabVehiclesAlt(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  });
+
+  @GET('/sales/lab/{registrationId}')
+  Future<dynamic> getSalesLabDetail(
+    @Header('Authorization') String token,
+    @Path('registrationId') String registrationId,
+  );
+
+  @GET('/qc/lab/sales/{registrationId}')
+  Future<dynamic> getSalesLabDetailAlt(
+    @Header('Authorization') String token,
+    @Path('registrationId') String registrationId,
+  );
+
+  @POST('/sales/lab/submit')
+  Future<dynamic> submitSalesLab(
+    @Header('Authorization') String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
+  @POST('/qc/lab/sales/submit')
+  Future<dynamic> submitSalesLabAlt(
+    @Header('Authorization') String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
+  @GET('/sales/loading/statistics')
+  Future<dynamic> getSalesLoadingStatistics(
+    @Header('Authorization') String token,
+  );
+
+  @GET('/loading/sales/statistics')
+  Future<dynamic> getSalesLoadingStatisticsAlt(
+    @Header('Authorization') String token,
+  );
+
+  @GET('/sales/loading/vehicles')
+  Future<dynamic> getSalesStartLoadingVehicles(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  });
+
+  @GET('/loading/sales/vehicles')
+  Future<dynamic> getSalesStartLoadingVehiclesAlt(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  });
+
+  @GET('/sales/loading/start/vehicles')
+  Future<dynamic> getSalesStartLoadingVehiclesAlt2(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+  });
+
+  @GET('/sales/loading_2/vehicles')
+  Future<dynamic> getSalesFinishLoadingVehicles(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+    @Query('include_completed') bool? includeCompleted,
+  });
+
+  @GET('/loading_2/sales/vehicles')
+  Future<dynamic> getSalesFinishLoadingVehiclesAlt(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+    @Query('include_completed') bool? includeCompleted,
+  });
+
+  @GET('/sales/loading/finish/vehicles')
+  Future<dynamic> getSalesFinishLoadingVehiclesAlt2(
+    @Header('Authorization') String token, {
+    @Query('include_rejected') bool? includeRejected,
+    @Query('include_cancel') bool? includeCancel,
+    @Query('include_completed') bool? includeCompleted,
+  });
+
+  @GET('/sales/loading/{registrationId}')
+  Future<dynamic> getSalesStartLoadingDetail(
+    @Header('Authorization') String token,
+    @Path('registrationId') String registrationId,
+  );
+
+  @GET('/loading/sales/{registrationId}')
+  Future<dynamic> getSalesStartLoadingDetailAlt(
+    @Header('Authorization') String token,
+    @Path('registrationId') String registrationId,
+  );
+
+  @GET('/sales/loading/start/{registrationId}')
+  Future<dynamic> getSalesStartLoadingDetailAlt2(
+    @Header('Authorization') String token,
+    @Path('registrationId') String registrationId,
+  );
+
+  @GET('/sales/loading_2/{registrationId}')
+  Future<dynamic> getSalesFinishLoadingDetail(
+    @Header('Authorization') String token,
+    @Path('registrationId') String registrationId,
+  );
+
+  @GET('/loading_2/sales/{registrationId}')
+  Future<dynamic> getSalesFinishLoadingDetailAlt(
+    @Header('Authorization') String token,
+    @Path('registrationId') String registrationId,
+  );
+
+  @GET('/sales/loading/finish/{registrationId}')
+  Future<dynamic> getSalesFinishLoadingDetailAlt2(
+    @Header('Authorization') String token,
+    @Path('registrationId') String registrationId,
+  );
+
+  @POST('/sales/loading/create')
+  Future<dynamic> submitSalesStartLoading(
+    @Header('Authorization') String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
+  @POST('/loading/sales/create')
+  Future<dynamic> submitSalesStartLoadingAlt(
+    @Header('Authorization') String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
+  @POST('/sales/loading/start')
+  Future<dynamic> submitSalesStartLoadingAlt2(
+    @Header('Authorization') String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
+  @POST('/sales/loading_2/create')
+  Future<dynamic> submitSalesFinishLoading(
+    @Header('Authorization') String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
+  @POST('/loading_2/sales/create')
+  Future<dynamic> submitSalesFinishLoadingAlt(
+    @Header('Authorization') String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
+  @POST('/sales/loading/finish')
+  Future<dynamic> submitSalesFinishLoadingAlt2(
+    @Header('Authorization') String token,
+    @Body() Map<String, dynamic> payload,
+  );
+
   // ==================== MANAGER CHECK ====================
 
   @GET("/manager/check/tickets")
