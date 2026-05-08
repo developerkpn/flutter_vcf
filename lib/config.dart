@@ -42,7 +42,7 @@ class AppConfig {
   }
 
   static String get _devBaseUrlForPlatform {
-    if (Platform.isAndroid) {
+    if (!kIsWeb && Platform.isAndroid) {
       return devApiBaseUrlAndroid;
     }
     return devApiBaseUrl;
